@@ -1,0 +1,1322 @@
+<meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamHub - Ultimate Feed</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&amp;display=swap" rel="stylesheet">
+    <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #050505; color: white; overflow-x: hidden; }
+  
+    /* Utilidades */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+   
+    /* --- BOTONES DE CONTROL CARRUSEL --- */
+    .nav-btn {
+        position: absolute; top: 0; bottom: 0; z-index: 40; width: 60px;
+        display: none; align-items: center; justify-content: center;
+        transition: opacity 0.3s;
+    }
+    .nav-btn.left { left: 0; background: linear-gradient(to right, #050505 0%, transparent 100%); }
+    .nav-btn.right { right: 0; background: linear-gradient(to left, #050505 0%, transparent 100%); }
+    .nav-btn button {
+        background: rgba(255,255,255,0.1); backdrop-filter: blur(10px);
+        border-radius: 50%; width: 40px; height: 40px; border: 1px solid rgba(255,255,255,0.1);
+        color: white; font-size: 20px; transition: transform 0.2s, background 0.2s;
+    }
+    .nav-btn button:hover { background: rgba(255,255,255,0.3); transform: scale(1.1); }
+    @media (min-width: 1024px) { .carousel-wrapper:hover .nav-btn { display: flex; } }
+   
+    /* --- ESTILOS DE TARJETAS (FEED) --- */
+    .card-std { min-width: 200px; width: 200px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; position: relative; }
+    .card-video {
+        height: 220px; width: 220px; flex-shrink: 0; position: relative; overflow: hidden; border-radius: 12px;
+        transition: width 0.5s cubic-bezier(0.25, 1, 0.5, 1); cursor: pointer;
+    }
+    @media (min-width: 1024px) { .card-video:hover { width: 390px; } }
+    .card-list-group { min-width: 340px; display: flex; flex-direction: column; gap: 16px; }
+    .list-item { display: flex; align-items: center; gap: 12px; padding: 6px; border-radius: 8px; transition: background 0.2s; cursor: pointer; }
+    .list-item:hover { background: rgba(255,255,255,0.08); }
+   
+    /* --- INTERACCIÓN --- */
+    .overlay-full {
+        position: absolute; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
+        opacity: 0; transition: opacity 0.3s; display: flex; align-items: center; justify-content: center; gap: 12px; border-radius: 12px;
+    }
+    .group:hover .overlay-full { opacity: 1; }
+    .overlay-mini {
+        position: absolute; inset: 0; background: rgba(0,0,0,0.4); opacity: 0; transition: opacity 0.2s;
+        display: flex; align-items: center; justify-content: center; border-radius: 4px;
+    }
+    .list-item:hover .overlay-mini { opacity: 1; }
+   
+    /* Iconos */
+    .action-icon { width: 36px; height: 36px; transition: transform 0.2s, opacity 0.3s; cursor: pointer; pointer-events: auto; }
+    .action-icon:hover { transform: scale(1.15); }
+    .play-icon-lg { width: 56px; height: 56px; transition: transform 0.2s; cursor: pointer; pointer-events: auto; }
+    .play-icon-lg:hover { transform: scale(1.1); }
+    .play-icon-sm { 
+        width: 28px; 
+        height: 28px; 
+        /* filter: invert(1); */ /* Comentado para que quede blanco natural */
+        pointer-events: auto; 
+    }
+   
+    /* Grid View Card */
+    .grid-card { width: 100%; display: flex; flex-direction: column; gap: 10px; cursor: pointer; position: relative; }
+    .grid-card .aspect-square { border-radius: 12px; overflow: hidden; position: relative; }
+   
+    /* BÚSQUEDA MEJORADA PARA DESKTOP */
+    .desktop-search-container {
+        position: relative;
+    }
+   
+    .desktop-search-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: rgba(10, 10, 10, 0.98);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        margin-top: 8px;
+        padding: 12px;
+        max-height: 400px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+   
+    .desktop-search-results.active {
+        display: block;
+        animation: fadeIn 0.2s ease;
+    }
+   
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+   
+    .search-result-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+   
+    .search-result-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+   
+    /* BOTÓN PLAY PARA MÓVIL */
+    .mobile-play-button {
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        width: 32px;
+        height: 32px;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 30;
+        pointer-events: auto;
+    }
+   
+    .mobile-play-button img {
+        width: 16px;
+        height: 16px;
+        /* filter: invert(1); */  /* Comentado → ahora el ícono se ve blanco como el SVG original */
+    }
+   
+    @media (min-width: 1024px) {
+        .mobile-play-button {
+            display: none;
+        }
+    }
+   
+    /* Búsqueda móvil mejorada */
+    #mobileSearchBar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 9999;
+        transform: translateY(-100%);
+        transition: transform 0.3s ease;
+    }
+    #mobileSearchBar.open {
+        transform: translateY(0);
+    }
+    .search-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(8px);
+        z-index: 9998;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+    .search-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+   
+    /* Móvil Disable Hovers */
+    @media (max-width: 1023px) {
+        .overlay-full, .overlay-mini, .nav-btn { display: none !important; }
+    }
+</style>
+
+
+    
+    <div class="search-overlay" id="searchOverlay" onclick="closeSearch()"></div>
+    
+    
+    <header id="top-header" class="sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5">
+        <div class="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between" id="header-container">
+            
+            <a href="/" class="flex items-center gap-2">
+                <img src="https://media.baltaanay.org/web/image/885-f3d79ca9/xhbalta-aula.png" alt="StreamHub Logo" class="w-8 h-8 rounded-lg object-cover" loading="lazy">
+                <span class="text-xl font-bold text-white">Media</span>
+            </a>
+
+            
+            <div class="hidden lg:flex items-center gap-4 desktop-search-container">
+                <div class="relative">
+                    <input type="text" id="desktopSearch" placeholder="Buscar episodios, series..." class="bg-white/10 border border-white/20 rounded-full px-4 py-2 pl-10 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500" oninput="handleDesktopSearchInput(this.value)" onkeypress="if(event.key === 'Enter') handleDesktopSearchEnter(event)" onfocus="showDesktopSearchResults()">
+                    <img src="https://media.baltaanay.org/web/image/793-902e5b33/Search%20%282%29.png" alt="Buscar" class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" loading="lazy">
+                </div>
+                
+                <div class="desktop-search-results" id="desktopSearchResults">
+                    <div id="desktopSearchResultsContent"></div>
+                </div>
+                <a href="/my/home" class="text-sm font-bold text-gray-400 hover:text-white">Iniciar sesión</a>
+            </div>
+
+            
+            <div class="flex items-center gap-4">
+                <button onclick="toggleMobileSearch()" class="lg:hidden text-gray-400 hover:text-white">
+                    <img src="https://media.baltaanay.org/web/image/793-902e5b33/Search%20%282%29.png" alt="Buscar" class="w-5 h-5" loading="lazy">
+                </button>
+                <a href="/novedades" class="relative text-gray-400 hover:text-white">
+                    <img src="https://media.baltaanay.org/web/image/796-aee658de/Explore.png" alt="Notificaciones" class="w-5 h-5" loading="lazy">
+                    <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                </a>
+                <a href="/my/home" class="w-8 h-8 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full overflow-hidden">
+                    <img src="https://media.baltaanay.org/web/image/793-902e5b33/Search%20%282%29.png" alt="Usuario" class="w-full h-full object-cover" loading="lazy">
+                </a>
+            </div>
+        </div>
+    </header>
+
+    
+    <div id="mobileSearchBar" class="lg:hidden bg-[#050505] p-4 border-b border-white/10">
+        <div class="flex items-center gap-3">
+            <img src="https://media.baltaanay.org/web/image/793-902e5b33/Search%20%282%29.png" alt="Buscar" class="w-5 h-5" loading="lazy">
+            <input type="text" id="mobileSearchInput" placeholder="Buscar episodios, series..." class="flex-1 bg-transparent border-none text-white text-lg focus:outline-none placeholder-gray-500" oninput="handleMobileSearchInput(this.value)" onkeypress="if(event.key === 'Enter') handleMobileSearchEnter(event)">
+            <button onclick="handleMobileSearchButton()" class="text-white px-3 py-1 bg-blue-600 rounded-md text-sm">Buscar</button>
+            <button onclick="toggleMobileSearch()" class="text-white text-xl">×</button>
+        </div>
+        
+        <div id="mobileSearchResults" class="mt-4 max-h-[60vh] overflow-y-auto"></div>
+    </div>
+    
+    
+    <div class="sticky top-0 z-40 bg-[#050505]/95 backdrop-blur-xl border-b border-white/5" id="category-filters">
+        <div class="py-3 overflow-x-auto no-scrollbar">
+            <div class="max-w-[1600px] mx-auto px-6 flex items-center gap-3" id="category-pills"></div>
+        </div>
+    </div>
+    
+    
+    <main class="max-w-[1600px] mx-auto px-6 mt-4 min-h-screen">
+        <div id="feed-view" class="space-y-12 transition-opacity duration-300">
+            
+        </div>
+        <div id="grid-view" class="hidden transition-opacity duration-300">
+            <div class="flex items-center justify-between mb-8 mt-6">
+                <h2 id="grid-title" class="text-2xl font-bold">Resultados</h2>
+                <button onclick="showFeed()" class="text-sm font-bold text-gray-400 hover:text-white flex items-center gap-1">
+                    <span class="text-xl">×</span> Cerrar búsqueda
+                </button>
+            </div>
+            <div id="results-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6"></div>
+            <div id="empty-state" class="hidden py-10 text-center">
+                <p class="text-gray-400 text-lg mb-8" id="empty-msg">No encontramos nada...</p>
+                <h3 class="text-xl font-bold mb-6 text-white">Quizás te interese esto:</h3>
+                <div id="recommendations-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6"></div>
+            </div>
+        </div>
+    </main>
+
+<script>
+// --- ICONOS ACTUALIZADOS ---
+const ICONS = {
+    play: 'https://marca1.odoo.com/web/image/508-f876320c/play.svg',
+    add: 'https://marca1.odoo.com/web/image/509-c555b4ef/a%C3%B1adir%20a.svg',
+    added: 'https://nikichitonjesus.odoo.com/web/image/1112-d141b3eb/a%C3%B1adido.png',
+    dl: 'https://marca1.odoo.com/web/image/510-7a9035c1/descargar.svg',
+    noDl: 'https://nikichitonjesus.odoo.com/web/image/1051-622a3db3/no-desc.webp'
+};
+
+// --- CATEGORÍAS EDUCATIVAS ---
+const CATEGORIES = [
+    "Todos",
+    "Derecho",
+    "Física y Astronomía",
+    "Matemáticas",
+    "Historia",
+    "Filosofía",
+    "Economía y Finanzas",
+    "Ciencias Sociales",
+    "Arte y Cultura",
+    "Literatura y Audiolibros",
+    "Cine y TV",
+    "Documentales",
+    "Ciencias Naturales",
+    "Tecnología e Informática",
+    "Otras Ciencias"
+];
+
+// --- EPISODIOS DE EJEMPLO (mejorados con cover2 para videos) ---
+const USER_EPISODES = [
+    { date: '2025-11-28', type: 'audio', mediaUrl: 'https://d3ctxlq1ktw2nl.cloudfront.net/staging/2025-10-29/413399242-44100-2-2f259e66aeac3.m4a', coverUrl: 'https://s3-us-west-2.amazonaws.com/anchor-generated-image-bank/staging/podcast_uploaded_nologo400/44500417/44500417-1759018829686-8b0dde55850ed.jpg', title: 'La excepción en el proceso de administración de Justicia', description: 'La excepción en el proceso de administración de Justicia', detailUrl: 'https://media.baltaanay.org/teoria-del-proceso', allowDownload: false, author: "Barahona", series: { portada_serie: 'https://media.baltaanay.org/web/image/658-redirect/960bc627aab97e6134955b4d5d1c99d0.jpg', titulo_serie: 'Teoría del proceso', descripcion_serie: 'Proceso en el derecho y la forma de poner en movimiento la maquinaria de Justicia', url_serie: 'https://media.baltaanay.org/teoria-del-proceso' } },
+    { date: '2025-11-28', type: 'audio', mediaUrl: 'https://balta-derecho.odoo.com/documents/content/3L5vYn32Sq-M5sUKB96S1Ao9', coverUrl: 'https://s3-us-west-2.amazonaws.com/anchor-generated-image-bank/staging/podcast_uploaded_nologo400/44500417/44500417-1759018829686-8b0dde55850ed.jpg', title: 'Principios procesales', description: 'La excepción en el proceso de administración de Justicia', detailUrl: 'https://media.baltaanay.org/teoria-del-proceso', allowDownload: false, author: "Barahona", series: { portada_serie: 'https://media.baltaanay.org/web/image/658-redirect/960bc627aab97e6134955b4d5d1c99d0.jpg', titulo_serie: 'Teoría del proceso', descripcion_serie: 'Proceso en el derecho y la forma de poner en movimiento la maquinaria de Justicia', url_serie: 'https://media.baltaanay.org/teoria-del-proceso' } },
+    { date: '2025-11-01', type: 'video', mediaUrl: 'https://lb.s3.odysee.tv/vods2.odysee.live/odysee-replays/84515919a2e010fa2c381702a6777c1035c2deb3/1762812470.mp4', coverUrl: 'https://balta.odoo.com/web/image/417-e2fd48e0/media.webp', title: 'Responsabilidad penal en la adolecencia', description: 'Conferencia de Derechos Humanos. Sobre la responsabilidad penal de la adolecencia, las penas y las medidas de seguridad.', detailUrl: '/ddhh/adolecencia', allowDownload: false, author: "Rony Eulalio", series: { portada_serie: 'https://scout.es/wp-content/uploads/2021/12/186-01.jpg', titulo_serie: 'Derechos Humanos', descripcion_serie: 'Derechos Humanos', url_serie: '/ddhh' } },
+    { date: '2025-11-01', type: 'video', mediaUrl: 'https://lb.s3.odysee.tv/vods2.odysee.live/odysee-replays/84515919a2e010fa2c381702a6777c1035c2deb3/1762807738.mp4', coverUrl: 'https://balta.odoo.com/web/image/417-e2fd48e0/media.webp', title: 'Repaso de DD Procesal Constitucional', description: 'Penultima clase de Derecho Procesal Constitucional 2025', detailUrl: '/procesal-constitucional', allowDownload: false, author: "César Solares", series: { portada_serie: 'https://balta.odoo.com/web/image/417-e2fd48e0/media.webp', titulo_serie: 'Derecho Procesal Constitucional', descripcion_serie: 'Derecho Procesal Constitucional', url_serie: '/procesal-constitucional' } },
+    {
+date: '2026-02-10',
+                mediaUrl: "https://d3ctxlq1ktw2nl.cloudfront.net/staging/2026-1-13/418061888-44100-2-bd0c488cd9ace.m4a",
+                type: "audio",
+				coverUrl: 'https://media.baltaanay.org/web/image/925-6ed84678/DERECHO%20PENAL%20III.png',
+                title: "Corrientes de la teoría del delito",
+                detailUrl: "ddpp-3/clases",
+                author: "Lemus",
+                text: "Continuación de las corrientes de la teoría del delito. Teoría causalista, finalista y funcionalista.",
+                allowDownload: false,
+                coverUrl: "https://s3-us-west-2.amazonaws.com/anchor-generated-image-bank/staging/podcast_uploaded_episode400/44500417/44500417-1769910530363-7e96ebf855644.jpg", 
+series: { 
+            portada_serie: 'https://media.baltaanay.org/web/image/925-6ed84678/DERECHO%20PENAL%20III.png', 
+            titulo_serie: 'Derecho penal 3', 
+            descripcion_serie: 'Derecho Público', 
+            url_serie: 'ddpp-3/clases' 
+        }
+            },
+            {
+date: '2026-02-03',
+                mediaUrl: "https://lb.s3.odysee.tv/vods2.odysee.live/odysee-replays/dd57d90536480f9a751ba4429447fd5f613efce3/1770150346.mp4",
+                type: "video",
+				coverUrl: 'https://media.baltaanay.org/web/image/925-6ed84678/DERECHO%20PENAL%20III.png',
+				title: "La teoría causalista",
+                detailUrl: "ddpp-3/clases",
+                author: "Lemus",
+                text: "Desarrollo de la teoría causalista. Derecho Penal 3. Historia, Ciencia.",
+                allowDownload: false,
+                coverUrl: "https://s3-us-west-2.amazonaws.com/anchor-generated-image-bank/staging/podcast_uploaded_episode400/44500417/44500417-1769910530363-7e96ebf855644.jpg", 
+series: { 
+            portada_serie: 'https://media.baltaanay.org/web/image/925-6ed84678/DERECHO%20PENAL%20III.png', 
+            titulo_serie: 'Derecho penal 3', 
+            descripcion_serie: 'Derecho Público', 
+            url_serie: 'ddpp-3/clases' 
+        }
+            },
+            {
+date: '2026-01-29',
+                mediaUrl: "https://podcasts.com/api/download-episode/214790939",
+                type: "audio",
+				coverUrl: 'https://media.baltaanay.org/web/image/925-6ed84678/DERECHO%20PENAL%20III.png',
+                title: "¿Qué es el Derecho Penal?",
+                author: "Lemus",
+                text: "Conjunto de normas jurídicas de naturaleza pública que regulan los delitos, las penas y las medidas de seguridad. Ciencia pública. Derecho, Historia.",
+                allowDownload: false,
+                detailUrl: "ddpp-3/clases",
+                coverUrlInfo: "https://media.baltaanay.org/web/image/925-6ed84678/DERECHO%20PENAL%20III.png", 
+series: { 
+            portada_serie: 'https://media.baltaanay.org/web/image/925-6ed84678/DERECHO%20PENAL%20III.png', 
+            titulo_serie: 'Derecho penal 3', 
+            descripcion_serie: 'Derecho Público', 
+            url_serie: 'ddpp-3/clases' 
+        }
+            },
+            {
+date: '2026-02-12',
+            mediaUrl: "https://d3ctxlq1ktw2nl.cloudfront.net/staging/2026-1-13/418069738-44100-2-616f210f1eb48.m4a",
+            type: "audio",
+            coverUrl: 'https://media.baltaanay.org/web/image/925-6ed84678/DERECHO%20PENAL%20III.png',
+			title: "La tipicidad y los elementos del delito",
+            detailUrl: "ddpp-3/clases",
+            author: "Lemus",
+            text: "Análisis profundo del concepto de tipicidad en derecho y sociedad. Una mirada crítica y actual. Ciencia.",
+            allowDownload: false, 
+series: { 
+            portada_serie: 'https://media.baltaanay.org/web/image/925-6ed84678/DERECHO%20PENAL%20III.png', 
+            titulo_serie: 'Derecho penal 3', 
+            descripcion_serie: 'Derecho Público', 
+            url_serie: 'ddpp-3/clases' 
+        }
+        },
+{
+date: '2026-02-06',
+            mediaUrl: "https://d3ctxlq1ktw2nl.cloudfront.net/staging/2026-1-13/418064713-44100-2-ed2c58b07cd6.m4a",
+            type: "audio",
+            coverUrl: 'https://media.baltaanay.org/web/image/927-edc793ab/Pueblos%20ind%C3%ADgenas.png',
+			title: "Crisis del Estado de Derecho",
+            detailUrl: "/dp-indigenas",
+            author: "Raymundo",
+            text: "La crisis del Estado de Derecho. Por Lic. Raymundo Catz. El estado de derecho en crisis por los derechos de segunda y tercera generación.",
+            allowDownload: false, 
+series: { 
+            portada_serie: 'https://media.baltaanay.org/web/image/927-edc793ab/Pueblos%20ind%C3%ADgenas.png', 
+            titulo_serie: 'Derecho de los pueblos indígenas', 
+            descripcion_serie: 'Los derechos de tercera generación. Desarrolla los derechos de los pueblos indígenas o también conocidos como derechos de solidaridad.', 
+            url_serie: 'dp-indigenas' 
+        }},
+{
+            date: '2026-02-04',
+			mediaUrl: "https://lb.s3.odysee.tv/vods2.odysee.live/odysee-replays/dd57d90536480f9a751ba4429447fd5f613efce3/1770236623.mp4",
+            type: "video",
+			coverUrl: 'https://media.baltaanay.org/web/image/927-edc793ab/Pueblos%20ind%C3%ADgenas.png',
+            title: "Conceptos básicos de los Derechos Humanos",
+            detailUrl: "/dp-indigenas",
+            author: "Raymundo",
+            text: "Conceptos básicos de los Derechos Humanos",
+            allowDownload: false, 
+series: { 
+            portada_serie: 'https://media.baltaanay.org/web/image/927-edc793ab/Pueblos%20ind%C3%ADgenas.png', 
+            titulo_serie: 'Derecho de los pueblos indígenas', 
+            descripcion_serie: 'Los derechos de tercera generación. Desarrolla los derechos de los pueblos indígenas o también conocidos como derechos de solidaridad. Ciencias Sociales. Historia.', 
+            url_serie: 'dp-indigenas' 
+        }},
+{ 
+        date: '2026-02-02', 
+        type: 'video', 
+        mediaUrl: 'https://d3ctxlq1ktw2nl.cloudfront.net/staging/2026-1-2/417347225-44100-2-38463f72786e9.m4a', 
+        coverUrl: 'https://media.baltaanay.org/web/image/929-b905c3ef/DERECHO%20LABORAL.png', 
+        coverUrl2: 'https://media.baltaanay.org/web/image/929-b905c3ef/DERECHO%20LABORAL.png', // Cover2 para video expandido
+        title: 'Antecedentes Históricos del derecho de Trabajo', 
+        description: 'Antecedentes históricos del derecho de trabajo. Avidan Ortiz. Historia del derecho Laboral.', 
+        detailUrl: '/derecho-laboral-1', 
+        allowDownload: false,
+        author: "Avidan Ortiz", 
+        series: { 
+            portada_serie: 'https://media.baltaanay.org/web/image/929-b905c3ef/DERECHO%20LABORAL.png', 
+            titulo_serie: 'Derecho Laboral', 
+            descripcion_serie: 'Un derecho humano por excelencia. Es la ciencia, una disciplina pública. Ciencias Sociales.', 
+            url_serie: 'URL_SERIE' 
+        } 
+    },
+{ 
+        date: '2026-02-06', 
+        type: 'video', 
+        mediaUrl: 'https://d3ctxlq1ktw2nl.cloudfront.net/staging/2026-1-13/ca5f6f25-3b96-ff31-bb04-e712a81ce076.m4a', 
+        coverUrl: 'https://media.baltaanay.org/web/image/929-b905c3ef/DERECHO%20LABORAL.png', 
+        coverUrl2: 'https://media.baltaanay.org/web/image/929-b905c3ef/DERECHO%20LABORAL.png', // Cover2 para video expandido
+        title: 'Fuentes del Derecho de Trabajo', 
+        description: 'Historia. Fuentes del Derecho de trabajo. Ciencia.', 
+        detailUrl: '/derecho-laboral-1', 
+        allowDownload: false,
+        author: "Avidan Ortiz", 
+        series: { 
+            portada_serie: 'https://media.baltaanay.org/web/image/929-b905c3ef/DERECHO%20LABORAL.png', 
+            titulo_serie: 'Derecho Laboral', 
+            descripcion_serie: 'Un derecho humano por excelencia. Es la ciencia, una disciplina pública. Ciencias Sociales.', 
+            url_serie: 'URL_SERIE' 
+        } 
+    },
+    { date: '2025-09-27', type: 'audio', mediaUrl: 'https://d3ctxlq1ktw2nl.cloudfront.net/staging/2025-8-28/408260699-44100-2-4b5edeb875805.m4a', coverUrl: 'https://s3-us-west-2.amazonaws.com/anchor-generated-image-bank/staging/podcast_uploaded_episode400/44500417/44500417-1759018710643-950caadc41ea7.jpg', title: 'Veliz Franco y Otros Vs. Guatemala - Exposición', description: 'Guatemala presentaba un alto índice de impunidad general, en cuyo marco la mayoría de los actos violentos que conllevaban la muerte de mujeres quedaban impunes.', detailUrl: 'https://media.baltaanay.org/dh/caso-veliz-franco-vs-guatemala', allowDownload: true, author: "Melany y Laura", series: { portada_serie: 'https://scout.es/wp-content/uploads/2021/12/186-01.jpg', titulo_serie: 'Derechos Humanos', descripcion_serie: 'Derechos humanos', url_serie: '/ddhh' } },
+    
+];
+
+// --- SISTEMA DE PLAYLIST MEJORADO ---
+const playlistKey = 'streamhub_userPlaylist';
+let userPlaylist = JSON.parse(localStorage.getItem(playlistKey)) || [];
+
+// Función mejorada para agregar a playlist
+function addToUserPlaylist(episodeData) {
+    if (!episodeData || !episodeData.mediaUrl) {
+        console.error("Faltan datos del episodio para agregar a la playlist");
+        return false;
+    }
+    
+    const exists = userPlaylist.some(item => item.mediaUrl === episodeData.mediaUrl);
+    
+    if (!exists) {
+        const playlistItem = {
+            mediaUrl: episodeData.mediaUrl,
+            mediaType: episodeData.type || episodeData.mediaType || 'audio',
+            coverUrlContainer: episodeData.cover || episodeData.coverUrlContainer || episodeData.coverUrl,
+            coverUrlInfo: episodeData.cover || episodeData.coverUrlInfo || episodeData.coverUrl,
+            title: episodeData.title,
+            detailUrl: episodeData.detailUrl || '#',
+            author: episodeData.author || 'Desconocido',
+            next: [],
+            text: episodeData.description || '',
+            allowDownload: episodeData.allowDownload !== undefined ? episodeData.allowDownload : true
+        };
+        
+        userPlaylist.push(playlistItem);
+        localStorage.setItem(playlistKey, JSON.stringify(userPlaylist));
+        
+        updateAddButtons(episodeData.id || episodeData.mediaUrl);
+        
+        return true;
+    }
+    
+    return false;
+}
+
+// Actualizar iconos de agregar
+function updateAddButtons(identifier) {
+    const buttons = document.querySelectorAll(`[data-episode-id="${identifier}"], [data-media-url="${identifier}"]`);
+    buttons.forEach(btn => {
+        if (btn.dataset.added !== 'true') {
+            if (btn.tagName === 'IMG') {
+                btn.src = ICONS.added;
+            }
+            btn.dataset.added = 'true';
+            btn.title = 'Añadido a tu lista';
+        }
+    });
+}
+
+// Verificar si un episodio está en la playlist
+function isInPlaylist(mediaUrl) {
+    return userPlaylist.some(item => item.mediaUrl === mediaUrl);
+}
+
+// --- PROCESAMIENTO DE DATOS ---
+function determineCategories(ep) {
+    const cats = new Set();
+    const text = (ep.title + ' ' + ep.description + ' ' + (ep.series?.titulo_serie || '') + ' ' + (ep.series?.descripcion_serie || '')).toLowerCase();
+
+    const patterns = {
+        "Derecho": /\b(derecho|penal|civil|constitucional|procesal|delito|ley|jurisprudencia|código|tribunal|justicia|proceso)\b/i,
+        "Física y Astronomía": /\b(física|fisica|mecánica|mecanica|cuántica|cuantica|termodinámica|termodinamica|newton|einstein|astronomía|astronomia|planeta|cosmos)\b/i,
+        "Matemáticas": /\b(matemática|matematicas|calculo|cálculo|algebra|álgebra|geometria|geometría|estadistica|estadística|probabilidad|ecuacion|ecuación|teorema|integral)\b/i,
+        "Historia": /\b(historia|histórico|historico|siglo|época|epoca|imperio|guerra|revolución|revolucion|antiguo|medieval)\b/i,
+        "Filosofía": /\b(filosofía|filosofia|kant|platon|platón|aristoteles|ética|etica|metafísica|metafisica|ontología|ontologia|epistemología|epistemologia)\b/i,
+        "Economía y Finanzas": /\b(economía|economia|finanzas|inflación|inflacion|keynes|oferta|demanda|macroeconomía|macroeconomia|pib|mercado)\b/i,
+        "Ciencias Sociales": /\b(sociología|sociologia|antropología|antropologia|psicología|psicologia|sociedad|cultura|identidad|género|genero|desigualdad)\b/i,
+        "Arte y Cultura": /\b(arte|pintura|escultura|arquitectura|renacimiento|barroco|música|musica|cultura|artístico|artistico)\b/i,
+        "Literatura y Audiolibros": /\b(audiolibro|libro|novela|cuento|poema|clásico|clasico|literatura|lectura)\b/i,
+        "Cine y TV": /\b(cine|película|pelicula|serie|director|guion|ficción|ficcion|animación|animacion)\b/i,
+        "Documentales": /\b(documental|bbc|ciencia|naturaleza|espacio|universo|planeta|nacional geographic)\b/i,
+        "Ciencias Naturales": /\b(biología|biologia|química|quimica|geología|geologia|ecología|ecologia|evolución|evolucion|genética|genetica|clima|botánica|botanica)\b/i,
+        "Tecnología e Informática": /\b(tecnología|tecnologia|programación|programacion|python|ia|computación|computacion|algoritmo|software|desarrollo)\b/i
+    };
+
+    for (const [cat, regex] of Object.entries(patterns)) {
+        if (regex.test(text)) cats.add(cat);
+    }
+
+    if (ep.type === 'video') {
+        if (text.includes('documental')) cats.add("Documentales");
+        else cats.add("Cine y TV");
+    }
+
+    if (cats.size === 0) cats.add("Otras Ciencias");
+
+    return Array.from(cats);
+}
+
+const DATA = USER_EPISODES.map((ep, i) => ({
+    id: i,
+    title: ep.title,
+    author: ep.author || ep.series?.titulo_serie || 'Conferencias Académicas',
+    categories: determineCategories(ep),
+    cover: ep.coverUrl,
+    coverWide: ep.coverUrl2 || ep.coverUrl, // Usa coverUrl2 si existe y no es false
+    mediaUrl: ep.mediaUrl,
+    type: ep.type,
+    description: ep.description + ' ' + (ep.series?.descripcion_serie || ''),
+    allowDownload: ep.allowDownload !== undefined ? ep.allowDownload : true,
+    detailUrl: ep.detailUrl,
+    date: ep.date,
+    series: ep.series
+}));
+
+// --- VARIABLES GLOBALES ---
+let currentView = 'feed';
+let lastScrollTop = 0; // VARIABLE DECLARADA CORRECTAMENTE
+let searchTimeout = null;
+let lastSearchQuery = '';
+
+// --- BÚSQUEDA MEJORADA DESKTOP ---
+function showDesktopSearchResults() {
+    const results = document.getElementById('desktopSearchResults');
+    results.classList.add('active');
+}
+
+function hideDesktopSearchResults() {
+    setTimeout(() => {
+        const results = document.getElementById('desktopSearchResults');
+        if (results) {
+            results.classList.remove('active');
+        }
+    }, 200);
+}
+
+function handleDesktopSearchInput(query) {
+    clearTimeout(searchTimeout);
+    
+    if (!query || query.trim() === '') {
+        clearDesktopSearchResults();
+        return;
+    }
+    
+    searchTimeout = setTimeout(() => {
+        const results = performQuickSearch(query);
+        renderDesktopSearchResults(results, query);
+    }, 300);
+}
+
+function handleDesktopSearchEnter(event) {
+    event.preventDefault();
+    const query = document.getElementById('desktopSearch').value.trim();
+    if (query) {
+        performFullSearch(query);
+        hideDesktopSearchResults();
+    }
+}
+
+function performQuickSearch(query) {
+    const term = query.toLowerCase().trim();
+    return DATA.filter(ep =>
+        ep.title.toLowerCase().includes(term) ||
+        ep.author.toLowerCase().includes(term) ||
+        ep.categories.some(c => c.toLowerCase().includes(term)) ||
+        ep.description.toLowerCase().includes(term)
+    ).slice(0, 5);
+}
+
+function renderDesktopSearchResults(results, query) {
+    const container = document.getElementById('desktopSearchResultsContent');
+    if (!container) return;
+    
+    if (results.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4 text-gray-400">
+                <p>No encontramos resultados para "${query}"</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = results.map(ep => `
+        <div class="search-result-item" onclick="goToDetailFromSearch('${ep.detailUrl}', event)">
+            <div class="w-12 h-12 rounded-md overflow-hidden flex-shrink-0">
+                <img src="${ep.cover}" class="w-full h-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <h4 class="font-bold text-sm text-white truncate">${ep.title}</h4>
+                <p class="text-xs text-gray-400 truncate">${ep.author} • ${ep.type === 'video' ? 'Video' : 'Audio'}</p>
+            </div>
+        </div>
+    `).join('');
+    
+    // Agregar opción para ver todos los resultados
+    container.innerHTML += `
+        <div class="search-result-item mt-2 border-t border-white/10 pt-2" onclick="performFullSearch('${query}', event)">
+            <div class="flex items-center justify-center w-full">
+                <span class="text-blue-400 font-bold text-sm">Ver todos los resultados para "${query}"</span>
+            </div>
+        </div>
+    `;
+}
+
+function goToDetailFromSearch(url, event) {
+    event.stopPropagation();
+    event.preventDefault();
+    window.location.href = url; // Misma pestaña
+}
+
+function performFullSearch(query, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    performSearch(query);
+    hideDesktopSearchResults();
+}
+
+function clearDesktopSearchResults() {
+    const container = document.getElementById('desktopSearchResultsContent');
+    if (container) {
+        container.innerHTML = '';
+    }
+    const results = document.getElementById('desktopSearchResults');
+    if (results) {
+        results.classList.remove('active');
+    }
+}
+
+// --- BÚSQUEDA MÓVIL ---
+function handleMobileSearchInput(query) {
+    clearTimeout(searchTimeout);
+    
+    if (!query || query.trim() === '') {
+        clearMobileSearchResults();
+        return;
+    }
+    
+    searchTimeout = setTimeout(() => {
+        const results = performQuickSearch(query);
+        renderMobileSearchResults(results, query);
+    }, 300);
+}
+
+function handleMobileSearchEnter(event) {
+    event.preventDefault();
+    const query = document.getElementById('mobileSearchInput').value.trim();
+    if (query) {
+        handleMobileSearch(query);
+    }
+}
+
+function handleMobileSearchButton() {
+    const query = document.getElementById('mobileSearchInput').value.trim();
+    if (query) {
+        handleMobileSearch(query);
+    }
+}
+
+function renderMobileSearchResults(results, query) {
+    const container = document.getElementById('mobileSearchResults');
+    if (!container) return;
+    
+    if (results.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4 text-gray-400">
+                <p>No encontramos resultados para "${query}"</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = results.map(ep => `
+        <div class="search-result-item" onclick="goToDetailFromSearch('${ep.detailUrl}', event)">
+            <div class="w-12 h-12 rounded-md overflow-hidden flex-shrink-0">
+                <img src="${ep.cover}" class="w-full h-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <h4 class="font-bold text-sm text-white truncate">${ep.title}</h4>
+                <p class="text-xs text-gray-400 truncate">${ep.author} • ${ep.type === 'video' ? 'Video' : 'Audio'}</p>
+            </div>
+        </div>
+    `).join('');
+    
+    // Agregar opción para ver todos los resultados
+    container.innerHTML += `
+        <div class="search-result-item mt-2 border-t border-white/10 pt-2" onclick="handleMobileSearch('${query}')">
+            <div class="flex items-center justify-center w-full">
+                <span class="text-blue-400 font-bold text-sm">Ver todos los resultados para "${query}"</span>
+            </div>
+        </div>
+    `;
+}
+
+function clearMobileSearchResults() {
+    const container = document.getElementById('mobileSearchResults');
+    if (container) {
+        container.innerHTML = '';
+    }
+}
+
+function toggleMobileSearch() {
+    const el = document.getElementById('mobileSearchBar');
+    const overlay = document.getElementById('searchOverlay');
+    
+    if (el.classList.contains('open')) {
+        el.classList.remove('open');
+        overlay.classList.remove('active');
+        document.getElementById('mobileSearchInput').value = '';
+        clearMobileSearchResults();
+    } else {
+        el.classList.add('open');
+        overlay.classList.add('active');
+        document.getElementById('mobileSearchInput').focus();
+    }
+}
+
+function handleMobileSearch(query) {
+    const input = document.getElementById('mobileSearchInput');
+    const searchQuery = query || input.value.trim();
+    
+    if (searchQuery) {
+        performSearch(searchQuery);
+        closeSearch();
+    }
+}
+
+function closeSearch() {
+    const mobileBar = document.getElementById('mobileSearchBar');
+    const overlay = document.getElementById('searchOverlay');
+    
+    if (mobileBar && mobileBar.classList.contains('open')) {
+        mobileBar.classList.remove('open');
+    }
+    
+    if (overlay) {
+        overlay.classList.remove('active');
+    }
+    
+    const desktopSearch = document.getElementById('desktopSearch');
+    if (desktopSearch) {
+        desktopSearch.blur();
+    }
+    
+    clearDesktopSearchResults();
+    clearMobileSearchResults();
+}
+
+// --- NAVEGACIÓN Y VISTAS ---
+function toggleView(view) {
+    const feed = document.getElementById('feed-view');
+    const grid = document.getElementById('grid-view');
+    if (view === 'grid') {
+        feed.classList.add('hidden');
+        grid.classList.remove('hidden');
+        window.scrollTo(0, 0);
+    } else {
+        feed.classList.remove('hidden');
+        grid.classList.add('hidden');
+        const desktopSearch = document.getElementById('desktopSearch');
+        if (desktopSearch) desktopSearch.value = '';
+        const mobileInput = document.getElementById('mobileSearchInput');
+        if (mobileInput) mobileInput.value = '';
+        renderCategoryPills('Todos');
+    }
+    currentView = view;
+}
+
+function showFeed() { 
+    toggleView('feed'); 
+    closeSearch();
+}
+
+function performSearch(query) {
+    if (!query || query.trim() === '') { 
+        showFeed(); 
+        return; 
+    }
+    
+    const term = query.toLowerCase().trim();
+    lastSearchQuery = query;
+    
+    let results = DATA.filter(ep =>
+        ep.title.toLowerCase().includes(term) ||
+        ep.author.toLowerCase().includes(term) ||
+        ep.categories.some(c => c.toLowerCase().includes(term)) ||
+        ep.description.toLowerCase().includes(term)
+    );
+
+    renderGrid(results, `Resultados para "${query}"`);
+}
+
+function filterByCategory(cat) {
+    renderCategoryPills(cat);
+    if (cat === 'Todos') { 
+        showFeed(); 
+        return; 
+    }
+    const results = DATA.filter(ep => ep.categories.includes(cat));
+    renderGrid(results, cat);
+}
+
+// --- RENDER GRID Y CARDS MEJORADOS ---
+function renderGrid(items, title) {
+    toggleView('grid');
+    const gridContainer = document.getElementById('results-grid');
+    const emptyState = document.getElementById('empty-state');
+    const titleEl = document.getElementById('grid-title');
+    titleEl.innerText = title;
+    gridContainer.innerHTML = '';
+    
+    if (items.length === 0) {
+        emptyState.classList.remove('hidden');
+        gridContainer.classList.add('hidden');
+        const searchTerm = title.replace('Resultados para ', '').replace(/"/g, '');
+        document.getElementById('empty-msg').innerText = `No hemos encontrado nada para "${searchTerm}"`;
+        
+        const suggestions = [...DATA].sort(() => 0.5 - Math.random()).slice(0, 5);
+        const recGrid = document.getElementById('recommendations-grid');
+        recGrid.innerHTML = '';
+        suggestions.forEach(ep => recGrid.innerHTML += createGridCard(ep));
+    } else {
+        emptyState.classList.add('hidden');
+        gridContainer.classList.remove('hidden');
+        items.forEach(item => {
+            gridContainer.innerHTML += createGridCard(item);
+        });
+    }
+}
+
+function createGridCard(item) {
+    const isInPlaylistItem = isInPlaylist(item.mediaUrl);
+    const addIcon = isInPlaylistItem ? ICONS.added : ICONS.add;
+    const dlIcon = item.allowDownload ? ICONS.dl : ICONS.noDl;
+    
+    return `
+        <div class="grid-card group">
+            <div class="aspect-square bg-zinc-800 relative" onclick="goToDetail('${item.detailUrl}')">
+                <img src="${item.cover}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                <div class="overlay-full">
+                    <img src="${addIcon}" class="action-icon" onclick="handleAdd(event, ${item.id}); return false;" 
+                         data-episode-id="${item.id}" data-added="${isInPlaylistItem}">
+                    <img src="${ICONS.play}" class="play-icon-lg" onclick="handlePlay(event, ${item.id}); return false;">
+                    <img src="${dlIcon}" class="action-icon" onclick="handleDl(event, ${item.id}); return false;" 
+                         title="${item.allowDownload ? 'Descargar' : 'Descarga no disponible'}">
+                </div>
+                <!-- Botón play para móvil -->
+                <div class="mobile-play-button" onclick="handlePlay(event, ${item.id}); return false;">
+                    <img src="${ICONS.play}" alt="Play">
+                </div>
+            </div>
+            <div onclick="goToDetail('${item.detailUrl}')">
+                <h4 class="font-bold text-sm text-white truncate">${item.title}</h4>
+                <p class="text-xs text-gray-500 truncate">${item.author}</p>
+            </div>
+        </div>
+    `;
+}
+
+function renderCategoryPills(activeCat = 'Todos') {
+    const container = document.getElementById('category-pills');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    CATEGORIES.forEach(cat => {
+        const isActive = cat === activeCat;
+        const btn = document.createElement('button');
+        btn.className = `whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all ${isActive ? 'bg-white text-black' : 'bg-white/10 text-gray-300 hover:bg-white/20'}`;
+        btn.innerText = cat;
+        btn.onclick = () => filterByCategory(cat);
+        container.appendChild(btn);
+    });
+}
+
+// --- COMPONENTES DE TARJETAS MEJORADOS ---
+function createStandardCard(ep) {
+    const isInPlaylistItem = isInPlaylist(ep.mediaUrl);
+    const addIcon = isInPlaylistItem ? ICONS.added : ICONS.add;
+    const dlIcon = ep.allowDownload ? ICONS.dl : ICONS.noDl;
+    
+    return `<div class="card-std group">
+        <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-zinc-800" onclick="goToDetail('${ep.detailUrl}')">
+            <img src="${ep.cover}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+            <div class="overlay-full">
+                <img src="${addIcon}" class="action-icon" onclick="handleAdd(event, ${ep.id}); return false;" 
+                     data-episode-id="${ep.id}" data-added="${isInPlaylistItem}">
+                <img src="${ICONS.play}" class="play-icon-lg" onclick="handlePlay(event, ${ep.id}); return false;">
+                <img src="${dlIcon}" class="action-icon" onclick="handleDl(event, ${ep.id}); return false;" 
+                     title="${ep.allowDownload ? 'Descargar' : 'Descarga no disponible'}">
+            </div>
+            <!-- Botón play para móvil -->
+            <div class="mobile-play-button" onclick="handlePlay(event, ${ep.id}); return false;">
+                <img src="${ICONS.play}" alt="Play">
+            </div>
+        </div>
+        <div onclick="goToDetail('${ep.detailUrl}')">
+            <h3 class="font-bold text-white text-sm truncate">${ep.title}</h3>
+            <p class="text-xs text-gray-400 mt-1 truncate">${ep.author}</p>
+        </div>
+    </div>`;
+}
+
+// --- TARJETA DE VIDEO EXPANDIBLE CON COVER 2 ---
+function createVideoExpand(ep) {
+    const isInPlaylistItem = isInPlaylist(ep.mediaUrl);
+    const addIcon = isInPlaylistItem ? ICONS.added : ICONS.add;
+    const dlIcon = ep.allowDownload ? ICONS.dl : ICONS.noDl;
+    const hasCover2 = ep.coverWide && ep.coverWide !== ep.cover;
+    
+    return `<div class="card-video group">
+        <!-- Miniatura 1 (cuadrada) - visible por defecto -->
+        <img src="${ep.cover}" class="absolute inset-0 w-full h-full object-cover z-10 group-hover:opacity-0 transition-opacity duration-300">
+        
+        <!-- Miniatura 2 (ancha) - visible en hover solo si existe -->
+        ${hasCover2 ? `
+        <img src="${ep.coverWide}" class="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        ` : ''}
+        
+        <div class="overlay-full z-20">
+            <img src="${addIcon}" class="action-icon" onclick="handleAdd(event, ${ep.id}); return false;" 
+                 data-episode-id="${ep.id}" data-added="${isInPlaylistItem}">
+            <img src="${ICONS.play}" class="play-icon-lg" onclick="handlePlay(event, ${ep.id}); return false;">
+            <img src="${dlIcon}" class="action-icon" onclick="handleDl(event, ${ep.id}); return false;" 
+                 title="${ep.allowDownload ? 'Descargar' : 'Descarga no disponible'}">
+        </div>
+        <!-- Botón play para móvil -->
+        <div class="mobile-play-button z-30" onclick="handlePlay(event, ${ep.id}); return false;">
+            <img src="${ICONS.play}" alt="Play">
+        </div>
+        <div class="absolute bottom-2 left-2 z-20 bg-black/60 px-2 py-0.5 rounded text-[10px] font-bold">VIDEO</div>
+    </div>`;
+}
+
+function createListItem(ep, idx) {
+    const isInPlaylistItem = isInPlaylist(ep.mediaUrl);
+    const addIcon = isInPlaylistItem ? ICONS.added : ICONS.add;
+    
+    return `<div class="list-item group">
+        <span class="text-gray-500 font-bold w-4 text-center text-sm">${idx + 1}</span>
+        <div class="relative w-14 h-14 flex-shrink-0 rounded overflow-hidden" onclick="goToDetail('${ep.detailUrl}')">
+            <img src="${ep.cover}" class="w-full h-full object-cover">
+            <div class="overlay-mini" onclick="handlePlay(event, ${ep.id}); return false;"><img src="${ICONS.play}" class="play-icon-sm"></div>
+        </div>
+        <div class="flex-1 min-w-0" onclick="goToDetail('${ep.detailUrl}')">
+            <h4 class="font-bold text-sm truncate text-white">${ep.title}</h4>
+            <p class="text-xs text-gray-500 truncate">${ep.author}</p>
+        </div>
+        <button class="hidden lg:group-hover:block opacity-60 hover:opacity-100 pr-2" onclick="handleAdd(event, ${ep.id}); return false;">
+            <img src="${addIcon}" alt="Agregar" class="w-5 h-5" data-episode-id="${ep.id}" data-added="${isInPlaylistItem}">
+        </button>
+        <!-- Botón play para móvil (en lista) -->
+        <div class="lg:hidden mobile-play-button" style="position: static; margin-right: 8px;" onclick="handlePlay(event, ${ep.id}); return false;">
+            <img src="${ICONS.play}" alt="Play" class="w-4 h-4">
+        </div>
+    </div>`;
+}
+
+// --- CARRUSEL GENÉRICO ---
+function createCarousel(title, type, items, categoryContext) {
+    if (!items || items.length === 0) return '';
+    
+    const id = 'c-' + Math.random().toString(36).substr(2, 9);
+    let content = '';
+    
+    if (type === 'double') {
+        content = `<div id="${id}" class="flex flex-col flex-wrap h-[580px] gap-x-6 gap-y-6 overflow-x-auto no-scrollbar scroll-smooth">` + 
+                  items.map(ep => createStandardCard(ep)).join('') + 
+                  `</div>`;
+    } else if (type === 'list') {
+        content = `<div id="${id}" class="flex gap-8 overflow-x-auto no-scrollbar scroll-smooth pb-4">`;
+        for (let i = 0; i < items.length; i += 4) {
+            content += `<div class="card-list-group">` +
+                (items[i] ? createListItem(items[i], i) : '') +
+                (items[i+1] ? createListItem(items[i+1], i+1) : '') +
+                (items[i+2] ? createListItem(items[i+2], i+2) : '') +
+                (items[i+3] ? createListItem(items[i+3], i+3) : '') +
+                `</div>`;
+        }
+        content += `</div>`;
+    } else if (type === 'expand') {
+        content = `<div id="${id}" class="flex gap-4 overflow-x-auto no-scrollbar scroll-smooth py-2 pl-1">` + 
+                  items.map(ep => createVideoExpand(ep)).join('') + 
+                  `</div>`;
+    } else {
+        content = `<div id="${id}" class="flex gap-6 overflow-x-auto no-scrollbar scroll-smooth py-2 pl-1">` + 
+                  items.map(ep => createStandardCard(ep)).join('') + 
+                  `</div>`;
+    }
+    
+    return `<section class="carousel-wrapper relative group/section">
+        <div class="flex items-end justify-between mb-5 px-1">
+            <h2 class="text-2xl font-bold tracking-tight text-white hover:text-blue-500 transition-colors">${title}</h2>
+            <button onclick="filterByCategory('${categoryContext}')" class="text-xs font-bold text-gray-500 uppercase tracking-wider hover:text-white">Ver todo</button>
+        </div>
+        <div class="relative">
+            <div class="nav-btn left" onclick="document.getElementById('${id}').scrollLeft -= 600"><button>❮</button></div>
+            ${content}
+            <div class="nav-btn right" onclick="document.getElementById('${id}').scrollLeft += 600"><button>❯</button></div>
+        </div>
+    </section>`;
+}
+
+// --- CARRUSEL DE SERIES ---
+function createSeriesCarousel() {
+    const id = 'c-series-' + Math.random().toString(36).substr(2, 9);
+    const seriesGroups = {};
+    DATA.forEach(ep => {
+        if (ep.series && ep.series.titulo_serie) {
+            const serieKey = ep.series.titulo_serie;
+            if (!seriesGroups[serieKey]) {
+                seriesGroups[serieKey] = {episodes: [], seriesInfo: ep.series};
+            }
+            seriesGroups[serieKey].episodes.push(ep);
+        }
+    });
+    
+    const seriesKeys = Object.keys(seriesGroups);
+    if (seriesKeys.length === 0) return '';
+    
+    let content = `<div id="${id}" class="flex gap-8 overflow-x-auto no-scrollbar scroll-smooth pb-4">`;
+    
+    seriesKeys.forEach(serieKey => {
+        let group = seriesGroups[serieKey];
+        group.episodes.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const s = group.seriesInfo;
+        if (!s || group.episodes.length < 1) return;
+        
+        content += `<div class="card-list-group">
+            <div class="mb-4 cursor-pointer" onclick="goToDetail('${s.url_serie}')">
+                <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-zinc-800">
+                    <img src="${s.portada_serie}" class="w-full h-full object-cover">
+                </div>
+                <h3 class="font-bold text-white text-sm truncate mt-2">${s.titulo_serie}</h3>
+                <p class="text-xs text-gray-400">ver serie</p>
+            </div>`;
+        
+        group.episodes.slice(0, 4).forEach((ep, i) => {
+            content += createListItem(ep, i);
+        });
+        
+        content += `</div>`;
+    });
+    
+    content += `</div>`;
+    
+    return `<section class="carousel-wrapper relative group/section">
+        <div class="flex items-end justify-between mb-5 px-1">
+            <h2 class="text-2xl font-bold tracking-tight text-white hover:text-blue-500 transition-colors">Series y Cursos Académicos</h2>
+            <button class="text-xs font-bold text-gray-500 uppercase tracking-wider hover:text-white">Ver todo</button>
+        </div>
+        <div class="relative">
+            <div class="nav-btn left" onclick="document.getElementById('${id}').scrollLeft -= 600"><button>❮</button></div>
+            ${content}
+            <div class="nav-btn right" onclick="document.getElementById('${id}').scrollLeft += 600"><button>❯</button></div>
+        </div>
+    </section>`;
+}
+
+// --- HANDLERS MEJORADOS ---
+function handlePlay(e, id) {
+    e.stopPropagation();
+    e.preventDefault();
+    const ep = DATA.find(x => x.id == id);
+    
+    if (typeof window.playEpisodeExpanded === 'function') {
+        window.playEpisodeExpanded(
+            ep.mediaUrl, 
+            ep.type, 
+            ep.cover, 
+            ep.cover, 
+            ep.title, 
+            ep.detailUrl, 
+            ep.author, 
+            [], 
+            ep.description, 
+            ep.allowDownload
+        );
+    } else {
+        // Solo intentar descargar si hay reproductor externo
+        handleDl(e, id);
+    }
+    return false;
+}
+
+function handleAdd(e, id) {
+    e.stopPropagation();
+    e.preventDefault();
+    const ep = DATA.find(x => x.id == id);
+    const button = e.target.closest('img') || e.target;
+    
+    const agregado = addToUserPlaylist({
+        mediaUrl: ep.mediaUrl,
+        type: ep.type,
+        cover: ep.cover,
+        title: ep.title,
+        detailUrl: ep.detailUrl,
+        author: ep.author,
+        description: ep.description,
+        allowDownload: ep.allowDownload,
+        id: ep.id
+    });
+    
+    if (agregado) {
+        if (button.tagName === 'IMG') {
+            button.src = ICONS.added;
+        }
+        button.dataset.added = 'true';
+        if (button.parentElement) {
+            button.parentElement.title = 'Añadido a tu lista';
+        }
+        
+        button.style.transform = 'scale(1.2)';
+        setTimeout(() => {
+            button.style.transform = 'scale(1)';
+        }, 200);
+    }
+    
+    return false;
+}
+
+function handleDl(e, id) {
+    e.stopPropagation();
+    e.preventDefault();
+    const ep = DATA.find(x => x.id == id);
+    
+    if (!ep.allowDownload) {
+        alert('La descarga no está disponible para este episodio');
+        return false;
+    }
+    
+    const ext = ep.type === 'video' ? 'mp4' : 'mp3';
+    const filename = `${ep.title.replace(/[^a-z0-9]/gi, '_').substring(0, 50)}.${ext}`;
+    
+    try {
+        const a = document.createElement('a');
+        a.href = ep.mediaUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        // Si la descarga falla (no empieza con blob), abrir en nueva pestaña
+        setTimeout(() => {
+            if (!a.href.startsWith('blob:')) {
+                window.open(ep.mediaUrl, '_blank');
+            }
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Error en descarga:', error);
+        // Fallback: abrir en nueva pestaña
+        window.open(ep.mediaUrl, '_blank');
+    }
+    
+    return false;
+}
+
+function goToDetail(url) {
+    if (url && url !== '#') {
+        window.location.href = url; // MISMA PESTAÑA
+    }
+}
+
+// --- SCROLL HEADER (CORREGIDO) ---
+window.addEventListener('scroll', () => {
+    const st = window.pageYOffset || document.documentElement.scrollTop;
+    const topHeader = document.getElementById('top-header');
+    const mobileSearch = document.getElementById('mobileSearchBar');
+    
+    // Verificar si los elementos existen
+    if (!topHeader || !mobileSearch) {
+        return;
+    }
+    
+    if (st > lastScrollTop && st > 100) {
+        topHeader.style.transition = 'opacity 0.3s ease';
+        topHeader.style.opacity = '0';
+        topHeader.style.pointerEvents = 'none';
+        mobileSearch.style.transition = 'opacity 0.3s ease';
+        mobileSearch.style.opacity = '0';
+        mobileSearch.style.pointerEvents = 'none';
+    } else {
+        topHeader.style.opacity = '1';
+        topHeader.style.pointerEvents = 'auto';
+        mobileSearch.style.opacity = '1';
+        mobileSearch.style.pointerEvents = 'auto';
+    }
+    lastScrollTop = st <= 0 ? 0 : st;
+}, false);
+
+// --- INICIALIZACIÓN ---
+function init() {
+    console.log('Inicializando StreamHub...');
+    
+    // Verificar datos
+    if (!DATA || DATA.length === 0) {
+        console.error('No hay datos para mostrar');
+        const feedView = document.getElementById('feed-view');
+        if (feedView) {
+            feedView.innerHTML = 
+                '<div class="text-center py-20"><p class="text-gray-400 text-lg">No hay contenido disponible en este momento.</p></div>';
+        }
+        return;
+    }
+    
+    // Renderizar categorías
+    renderCategoryPills();
+    
+    const feed = document.getElementById('feed-view');
+    if (!feed) return;
+    
+    // Función segura para obtener elementos aleatorios
+    const getRandomSafe = (count, filterFn = () => true) => {
+        const filtered = DATA.filter(filterFn);
+        if (filtered.length === 0) return [];
+        
+        const shuffled = [...filtered].sort(() => 0.5 - Math.random());
+        return shuffled.slice(0, Math.min(count, shuffled.length));
+    };
+    
+    // Limpiar feed
+    feed.innerHTML = '';
+    
+    // AGREGAR TODOS LOS CARRUSELES SOLICITADOS
+    feed.innerHTML += createCarousel("Nuevos Lanzamientos", "standard", 
+        getRandomSafe(15), "Todos");
+    
+    feed.innerHTML += createCarousel("Series de Video", "expand", 
+        getRandomSafe(10, e => e.type === 'video'), "Cine y TV");
+    
+    feed.innerHTML += createCarousel("Top Semanal", "list", 
+        getRandomSafe(16), "Todos");
+    
+    feed.innerHTML += createCarousel("Para Estudiar Profundamente", "double", 
+        getRandomSafe(20), "Matemáticas");
+    
+    feed.innerHTML += createCarousel("Matemáticas", "standard", 
+        getRandomSafe(15, e => e.categories.includes("Matemáticas")), "Matemáticas");
+    
+    feed.innerHTML += createCarousel("Especiales en Video", "expand", 
+        getRandomSafe(10, e => e.type === 'video'), "Documentales");
+    
+    feed.innerHTML += createCarousel("Física y Astronomía", "standard", 
+        getRandomSafe(15, e => e.categories.includes("Física y Astronomía")), "Física y Astronomía");
+    
+    feed.innerHTML += createCarousel("Ciencias Naturales y Tecnología", "double", 
+        getRandomSafe(20, e => e.categories.some(c => 
+            ["Ciencias Naturales", "Tecnología e Informática"].includes(c))), "Otras Ciencias");
+    
+    feed.innerHTML += createSeriesCarousel();
+    
+    feed.innerHTML += createCarousel("Otras Ciencias y Disciplinas", "standard", 
+        getRandomSafe(15, e => e.categories.includes("Otras Ciencias") || 
+            e.categories.some(c => ["Ciencias Naturales", "Tecnología e Informática"].includes(c))), 
+        "Otras Ciencias");
+    
+    console.log('StreamHub inicializado correctamente');
+}
+
+// Inicializar cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
+
+// --- FUNCIONES GLOBALES PARA USO EXTERNO ---
+window.StreamHub = {
+    addToPlaylist: addToUserPlaylist,
+    playEpisode: function(episodeData) {
+        if (typeof window.playEpisodeExpanded === 'function') {
+            window.playEpisodeExpanded(
+                episodeData.mediaUrl, 
+                episodeData.type || 'audio', 
+                episodeData.cover || episodeData.coverUrlContainer, 
+                episodeData.cover || episodeData.coverUrlInfo, 
+                episodeData.title, 
+                episodeData.detailUrl || '#', 
+                episodeData.author || 'Desconocido', 
+                [], 
+                episodeData.description || episodeData.text || '', 
+                episodeData.allowDownload !== undefined ? episodeData.allowDownload : true
+            );
+        } else {
+            window.location.href = episodeData.detailUrl || episodeData.mediaUrl;
+        }
+    }
+};
+</script>
