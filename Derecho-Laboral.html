@@ -1,0 +1,641 @@
+<meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podcast Widget · Transparente</title>
+
+ 
+    
+
+<div class="podcast-widget">
+    
+    <div class="podcast-top-bar">
+        <div class="podcast-left-actions">
+            <div class="podcast-creator-avatar">
+                <img src="https://i1.sndcdn.com/avatars-000215477029-760863-t500x500.jpg" alt="Docente" loading="lazy">
+            </div>
+            <button class="podcast-icon-btn" id="podcastBtnAddMain" title="Añadir episodio actual a lista">
+                <img src="https://nikichitonjesus.odoo.com/web/image/776-52d85853/a%C3%B1adir%20a.webp" alt="" loading="lazy" role="presentation">
+            </button>
+            <button class="podcast-icon-btn" id="podcastBtnDownloadMain" title="Descargar episodio">
+                <img src="https://nikichitonjesus.odoo.com/web/image/624-ec376d7f/descargar.png" alt="" loading="lazy" role="presentation">
+            </button>
+            <button class="podcast-icon-btn" id="podcastBtnShareMain" title="Compartir">
+                <img src="https://nikichitonjesus.odoo.com/web/image/585-036b7961/cpmartir.png" alt="" loading="lazy" role="presentation">
+            </button>
+        </div>
+        
+        <button class="podcast-last-episode-btn" id="podcastLastEpisodePlayBtn">
+            <span class="podcast-play-icon-large">
+                <img src="https://nikichitonjesus.odoo.com/web/image/984-ba35a699/play.webp" alt="" loading="lazy" role="presentation">
+            </span>
+            <span class="podcast-btn-text">
+                <span class="podcast-small-label">ÚLTIMO EPISODIO</span>
+                <span class="podcast-strong-title">Reciente</span>
+            </span>
+        </button>
+    </div>
+
+    
+    <div class="podcast-episodes-list" id="podcastEpisodesListContainer"></div>
+</div>
+
+<style>
+    /* RESET interno */
+    .podcast-widget * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    /* Contenedor principal - AHORA TRANSPARENTE y 100% ANCHO */
+    .podcast-widget {
+        width: 100%;
+        max-width: 100%; /* Ocupa todo el ancho disponible */
+        margin: 0 auto;
+        background: transparent; /* Fondo general transparente */
+        padding: 32px 28px;
+    }
+
+    /* ---------- BARRA SUPERIOR AZUL MARINO ---------- */
+    .podcast-top-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-bottom: 40px;
+        background: #0a1a2f; /* Azul marino profundo */
+        padding: 16px 24px;
+        border-radius: 40px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 15px 30px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    .podcast-left-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .podcast-creator-avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 20px;
+        background: #1e3a5f;
+        padding: 3px;
+        box-shadow: 0 10px 20px -8px #00000080;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .podcast-creator-avatar img {
+        width: 100%;
+        height: 100%;
+        border-radius: 18px;
+        object-fit: cover;
+        display: block;
+    }
+
+    /* Botones de icono en barra superior */
+    .podcast-icon-btn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        width: 52px;
+        height: 52px;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(4px);
+    }
+
+    .podcast-icon-btn:hover {
+        background: rgba(255, 255, 255, 0.18);
+        transform: translateY(-2px);
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .podcast-icon-btn:active {
+        transform: scale(0.96);
+    }
+
+    .podcast-icon-btn img {
+        width: 26px;
+        height: 26px;
+        filter: brightness(0) invert(1);
+        opacity: 0.95;
+    }
+
+    /* ---------- BOTÓN ÚLTIMO EPISODIO PÚRPURA ---------- */
+    .podcast-last-episode-btn {
+        background: #7b2eda; /* Púrpura vibrante */
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 200px;
+        padding: 8px 24px 8px 16px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        box-shadow: 0 20px 30px -10px #4a1a8a;
+    }
+
+    .podcast-last-episode-btn:hover {
+        background: #8f3ef0;
+        transform: scale(1.02);
+        border-color: rgba(255, 255, 255, 0.4);
+        box-shadow: 0 25px 35px -10px #5a2aa0;
+    }
+
+    .podcast-play-icon-large {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 100px;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .podcast-play-icon-large img {
+        width: 24px;
+        height: 24px;
+        filter: brightness(0) invert(1);
+        margin-left: 2px;
+    }
+
+    .podcast-btn-text {
+        text-align: left;
+        line-height: 1.3;
+    }
+
+    .podcast-small-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+        color: rgba(255, 255, 255, 0.8);
+        text-transform: uppercase;
+        margin-bottom: 2px;
+    }
+
+    .podcast-strong-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: white;
+        white-space: nowrap;
+    }
+
+    /* ---------- LISTA DE EPISODIOS (fondos individuales) ---------- */
+    .podcast-episodes-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    /* Tarjetas con fondos sólidos */
+    .podcast-episode-card {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 20px 20px 20px 20px;
+        background: #1e293b; /* Color base para episodios (fondo sólido) */
+        border-radius: 32px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        transition: all 0.25s ease;
+        box-shadow: 0 15px 25px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Alternancia: pares ligeramente más claros */
+    .podcast-episode-card:nth-child(even) {
+        background: #2a3448;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .podcast-episode-card:hover {
+        background: #2f3b52;
+        transform: translateY(-2px);
+        border-color: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 20px 30px -10px #000;
+    }
+
+    .podcast-episode-cover {
+        width: 110px;
+        height: 110px;
+        border-radius: 28px;
+        object-fit: cover;
+        box-shadow: 0 15px 25px -10px #00000080;
+        border: 2px solid rgba(255, 255, 255, 0.15);
+        flex-shrink: 0;
+        background: #1a2538;
+    }
+
+    .podcast-episode-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .podcast-episode-title {
+        font-size: 1.3rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.3;
+        color: #ffffff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .podcast-episode-author {
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: #b0c5e5;
+        margin-top: 6px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .podcast-episode-author span {
+        background: rgba(255, 255, 255, 0.12);
+        padding: 4px 14px;
+        border-radius: 100px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #ffffff;
+        letter-spacing: 0.4px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        text-transform: uppercase;
+    }
+
+    .podcast-episode-description {
+        font-size: 0.94rem;
+        color: #cbd5e1;
+        margin-top: 10px;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        max-width: 550px;
+    }
+
+    /* Acciones de episodio */
+    .podcast-episode-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .podcast-left-episode-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .podcast-action-btn {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        width: 42px;
+        height: 42px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .podcast-action-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.3);
+        transform: translateY(-2px);
+    }
+
+    .podcast-action-btn img {
+        width: 22px;
+        height: 22px;
+        filter: brightness(0) invert(1);
+        opacity: 0.9;
+    }
+
+    /* Botón de descarga NO DISPONIBLE - más tenue */
+    .podcast-download-btn[data-allow="false"] {
+        opacity: 0.5;
+        background: rgba(255, 255, 255, 0.03);
+        cursor: not-allowed;
+    }
+
+    .podcast-download-btn[data-allow="false"]:hover {
+        transform: none;
+        background: rgba(255, 255, 255, 0.03);
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .podcast-download-btn[data-allow="false"] img {
+        opacity: 0.5;
+    }
+
+    /* Botón de reproducción episodio */
+    .podcast-play-episode-btn {
+        background: #7b2eda; /* Mismo púrpura del botón último episodio */
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        width: 54px;
+        height: 54px;
+        border-radius: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+    }
+
+    .podcast-play-episode-btn:hover {
+        background: #9f4ff5;
+        transform: scale(1.08);
+        border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .podcast-play-episode-btn img {
+        width: 26px;
+        height: 26px;
+        filter: brightness(0) invert(1);
+        margin-left: 3px;
+    }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+        .podcast-widget {
+            padding: 20px 16px;
+        }
+
+        .podcast-top-bar {
+            padding: 12px 18px;
+        }
+
+        .podcast-episode-card {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .podcast-episode-cover {
+            width: 140px;
+            height: 140px;
+        }
+
+        .podcast-episode-title {
+            font-size: 1.2rem;
+            white-space: normal;
+        }
+
+        .podcast-last-episode-btn .podcast-strong-title {
+            font-size: 16px;
+            white-space: normal;
+        }
+    }
+
+    @media (max-width: 500px) {
+        .podcast-top-bar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .podcast-left-actions {
+            justify-content: center;
+        }
+
+        .podcast-last-episode-btn {
+            justify-content: center;
+        }
+        
+        .podcast-episode-cover {
+            width: 100%;
+            max-width: 200px;
+            height: auto;
+            aspect-ratio: 1/1;
+        }
+    }
+</style>
+
+<script>
+    (function() {
+        // ========== DATOS DE LOS EPISODIOS ==========
+        const podcastFirstEpisode = {
+            mediaUrl: "https://d3ctxlq1ktw2nl.cloudfront.net/staging/2026-1-13/ca5f6f25-3b96-ff31-bb04-e712a81ce076.m4a",
+            mediaType: "audio",
+            coverUrlContainer: "https://media.baltaanay.org/web/image/929-b905c3ef/DERECHO%20LABORAL.png",
+            coverUrlInfo: "https://media.baltaanay.org/web/image/929-b905c3ef/DERECHO%20LABORAL.png",
+            title: "Fuentes del derecho de trabajo",
+            detailUrl: window.location.href,
+            author: "Avidan Ortiz",
+            text: "Fuentes del derecho de trabajo",
+            allowDownload: false
+        };
+
+        const podcastSeriesEpisodes = [
+            podcastFirstEpisode,
+                        {
+                mediaUrl: "https://d3ctxlq1ktw2nl.cloudfront.net/staging/2026-1-2/417347225-44100-2-38463f72786e9.m4a",
+                mediaType: "audio",
+                coverUrlContainer: "https://media.baltaanay.org/web/image/929-b905c3ef/DERECHO%20LABORAL.png",
+                title: "Antecedentes históricos del derecho de trabajo",
+                author: "Avidan Ortiz",
+                text: "Antecedentes históricos del derecho de trabajo",
+                allowDownload: false,
+                detailUrl: window.location.href,
+                coverUrlInfo: "https://media.baltaanay.org/web/image/929-b905c3ef/DERECHO%20LABORAL.png"
+            }
+        ];
+
+        const podcastIcons = {
+            add: "https://nikichitonjesus.odoo.com/web/image/776-52d85853/a%C3%B1adir%20a.webp",
+            added: "https://nikichitonjesus.odoo.com/web/image/1049-2b655d6d/like.webp",
+            download: "https://nikichitonjesus.odoo.com/web/image/624-ec376d7f/descargar.png",
+            noDownload: "https://nikichitonjesus.odoo.com/web/image/1051-622a3db3/no-desc.webp",
+            downloaded: "https://nikichitonjesus.odoo.com/web/image/1054-5b417eda/descargado.webp",
+            share: "https://nikichitonjesus.odoo.com/web/image/585-036b7961/cpmartir.png",
+            play: "https://nikichitonjesus.odoo.com/web/image/984-ba35a699/play.webp"
+        };
+
+        const playlistKey = 'podcastPlaylist';
+
+        window.podcastAbrirReproductor = function(episodio, listaCompleta = podcastSeriesEpisodes) {
+            if (typeof window.playEpisodeExpanded === 'function') {
+                window.playEpisodeExpanded(
+                    episodio.mediaUrl,
+                    episodio.mediaType || 'audio',
+                    episodio.coverUrlContainer || episodio.coverUrl || '',
+                    episodio.coverUrlInfo || '',
+                    episodio.title || '',
+                    episodio.detailUrl || window.location.href,
+                    episodio.author || '',
+                    listaCompleta,
+                    episodio.text || '',
+                    episodio.allowDownload !== false
+                );
+            } else {
+                console.warn('playEpisodeExpanded no disponible - Demo');
+                alert(`🎙️ ${episodio.title}`);
+            }
+        };
+
+        const container = document.getElementById('podcastEpisodesListContainer');
+        function renderPodcastEpisodes() {
+            if (!container) return;
+            container.innerHTML = '';
+            podcastSeriesEpisodes.forEach((ep, index) => {
+                const card = document.createElement('div');
+                card.className = 'podcast-episode-card';
+
+                const coverSrc = ep.coverUrl || ep.coverUrlContainer || ep.coverUrlInfo || 'https://via.placeholder.com/110';
+
+                card.innerHTML = `
+                    <img class="podcast-episode-cover" src="${coverSrc}" alt="${ep.title}" loading="lazy">
+                    <div class="podcast-episode-info">
+                        <h3 class="podcast-episode-title">${ep.title}</h3>
+                        <div class="podcast-episode-author">
+                            ${ep.author} <span>${ep.mediaType === 'video' ? 'VIDEO' : 'AUDIO'}</span>
+                        </div>
+                        <div class="podcast-episode-description">${ep.text || 'Sin descripción.'}</div>
+                        <div class="podcast-episode-actions">
+                            <div class="podcast-left-episode-actions">
+                                <button class="podcast-action-btn podcast-add-btn" data-mediaurl="${ep.mediaUrl}" title="Añadir a mi lista">
+                                    <img src="${podcastIcons.add}" alt="añadir">
+                                </button>
+                                <button class="podcast-action-btn podcast-download-btn" data-mediaurl="${ep.mediaUrl}" data-allow="${ep.allowDownload}" title="${ep.allowDownload ? 'Descargar' : 'Descarga no disponible'}">
+                                    <img src="${ep.allowDownload ? podcastIcons.download : podcastIcons.noDownload}" alt="descargar">
+                                </button>
+                                <button class="podcast-action-btn podcast-share-btn" data-detailurl="${ep.detailUrl}" data-title="${ep.title}" title="Compartir">
+                                    <img src="${podcastIcons.share}" alt="compartir">
+                                </button>
+                            </div>
+                            <button class="podcast-play-episode-btn podcast-play-specific" data-index="${index}" title="Reproducir episodio">
+                                <img src="${podcastIcons.play}" alt="play">
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            attachPodcastEvents();
+        }
+
+        function attachPodcastEvents() {
+            document.querySelectorAll('.podcast-add-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const mediaUrl = btn.dataset.mediaurl;
+                    const episode = podcastSeriesEpisodes.find(ep => ep.mediaUrl === mediaUrl);
+                    if (!episode) return;
+                    let playlist = JSON.parse(localStorage.getItem(playlistKey)) || [];
+                    if (!playlist.some(ep => ep.mediaUrl === mediaUrl)) {
+                        playlist.push(episode);
+                        localStorage.setItem(playlistKey, JSON.stringify(playlist));
+                        const img = btn.querySelector('img');
+                        img.src = podcastIcons.added;
+                        setTimeout(() => img.src = podcastIcons.add, 1500);
+                    } else {
+                        alert('Episodio ya en tu lista');
+                    }
+                };
+            });
+
+            document.querySelectorAll('.podcast-download-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const mediaUrl = btn.dataset.mediaurl;
+                    const allow = btn.dataset.allow === 'true';
+                    const episode = podcastSeriesEpisodes.find(ep => ep.mediaUrl === mediaUrl);
+                    if (!allow || !episode) {
+                        alert('Descarga no disponible');
+                        return;
+                    }
+                    window.open(episode.mediaUrl, '_blank');
+                    const img = btn.querySelector('img');
+                    const original = img.src;
+                    img.src = podcastIcons.downloaded;
+                    setTimeout(() => img.src = original, 1500);
+                };
+            });
+
+            document.querySelectorAll('.podcast-share-btn').forEach(btn => {
+                btn.onclick = async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const detailUrl = btn.dataset.detailurl;
+                    const title = btn.dataset.title;
+                    try {
+                        if (navigator.share) {
+                            await navigator.share({ title, url: detailUrl });
+                        } else {
+                            await navigator.clipboard.writeText(detailUrl);
+                            alert('📋 Enlace copiado');
+                        }
+                    } catch {
+                        await navigator.clipboard.writeText(detailUrl);
+                        alert('Enlace copiado');
+                    }
+                };
+            });
+
+            document.querySelectorAll('.podcast-play-specific').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const index = btn.dataset.index;
+                    const episode = podcastSeriesEpisodes[index];
+                    if (episode) podcastAbrirReproductor(episode, podcastSeriesEpisodes);
+                };
+            });
+        }
+
+        document.getElementById('podcastLastEpisodePlayBtn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            podcastAbrirReproductor(podcastSeriesEpisodes[0], podcastSeriesEpisodes);
+        });
+
+        document.getElementById('podcastBtnAddMain')?.addEventListener('click', () => {
+            const ep = podcastSeriesEpisodes[0];
+            let playlist = JSON.parse(localStorage.getItem(playlistKey)) || [];
+            if (!playlist.some(p => p.mediaUrl === ep.mediaUrl)) {
+                playlist.push(ep);
+                localStorage.setItem(playlistKey, JSON.stringify(playlist));
+                alert('Episodio actual añadido');
+            } else alert('Ya está en tu lista');
+        });
+
+        document.getElementById('podcastBtnDownloadMain')?.addEventListener('click', () => {
+            const ep = podcastSeriesEpisodes[0];
+            if (ep.allowDownload) window.open(ep.mediaUrl, '_blank');
+            else alert('Descarga no disponible');
+        });
+
+        document.getElementById('podcastBtnShareMain')?.addEventListener('click', async () => {
+            const ep = podcastSeriesEpisodes[0];
+            try {
+                if (navigator.share) await navigator.share({ title: ep.title, url: ep.detailUrl });
+                else {
+                    await navigator.clipboard.writeText(ep.detailUrl);
+                    alert('Enlace copiado');
+                }
+            } catch {
+                await navigator.clipboard.writeText(ep.detailUrl);
+                alert('Enlace copiado');
+            }
+        });
+
+        renderPodcastEpisodes();
+    })();
+</script>
