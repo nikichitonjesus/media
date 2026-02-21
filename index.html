@@ -2376,7 +2376,7 @@ img { user-select: none; -webkit-user-select: none; pointer-events: none; }
           </div>
           <div class="program-container">
             <button id="programBtn" class="full-width-btn">
-              <img src="https://www.nikichitonjesus.org/web/image/568-7e4a907b/Hoy.webp" alt="Program" loading="lazy">
+              <img src="https://nikichitonjes-home.odoo.com/web/image/478-0e3df8d3/reanudar.gif" alt="Program" loading="lazy">
               <span>Programa del Día</span>
             </button>
           </div>
@@ -2497,7 +2497,7 @@ let historyList = JSON.parse(localStorage.getItem('history')) || [];
 let currentIndex = -1;
 let nextList = [];
 let recomendados = window.RECOMENDADOS || [];
-let cachedRecomendados = []; // NUEVO: Cache para preservar orden aleatorio de recomendados
+let cachedRecomendados = []; 
 let episodeText = '';
 let episodeAuthor = 'Roberto';
 let activeList = 'next';
@@ -2716,8 +2716,6 @@ const cleanEvents = () => {
   mediaElement.addEventListener('volumechange', checkMute);
   mediaElement.addEventListener('ended', handleMediaEnd);
 };
-
-// NUEVA HELPER: Mapea un episodio de RECOMENDADOS a los params de loadMedia
 const mapEpisodeToMedia = (item) => {
   return {
     mediaUrl: item.mediaUrl || '',
@@ -2729,10 +2727,9 @@ const mapEpisodeToMedia = (item) => {
     author: item.series?.titulo_serie || 'Unknown',
     next: [],
     text: item.description || '',
-    allowDownload: true  // Default para recomendados
+    allowDownload: true
   };
 };
-
 const loadState = () => {
   const state = JSON.parse(localStorage.getItem('playerState')) || {};
   if (state.mediaUrl) {
@@ -2757,9 +2754,11 @@ const loadState = () => {
       if (state.isPlaying) {
         playWithFallback();
         updateIcons(true);
+        updateOpenPlayerButton(true);
       } else {
         mediaElement.pause();
         updateIcons(false);
+        updateOpenPlayerButton(false);
       }
     }, { once: true });
     updateSpeedButtons(state.playbackRate || 1);
@@ -2775,7 +2774,6 @@ const loadState = () => {
     updatePlaylist();
     updateLikes();
     updateModeToggleState();
-    // NUEVO: Recache recomendados al cargar estado
     cachedRecomendados = [...window.RECOMENDADOS];
   } else {
     const programa = window.PROGRAMA_DEL_DIA || {
@@ -2793,7 +2791,7 @@ const loadState = () => {
     showMinimized();
     cachedRecomendados = [...window.RECOMENDADOS];
   }
-  updateMediaSession(); // Fuerza inicial al restaurar estado
+  updateMediaSession();
 };
 const playWithFallback = () => {
   mediaElement.muted = isMuted;
@@ -2801,7 +2799,8 @@ const playWithFallback = () => {
     updateIcons(true);
     updateAllItemIcons(true);
     isAutoMuted = false;
-    updateMediaSession(); // Fuerza actualización al iniciar play real
+    updateMediaSession();
+    updateOpenPlayerButton(true);
   }).catch((error) => {
     console.log("Autoplay blocked, trying muted:", error);
     mediaElement.muted = true;
@@ -2812,7 +2811,8 @@ const playWithFallback = () => {
       updateIcons(true);
       updateAllItemIcons(true);
       showMuteIndicator();
-      updateMediaSession(); // También en fallback
+      updateMediaSession();
+      updateOpenPlayerButton(true);
     }).catch((err) => {
       console.log("Play failed:", err);
     });
@@ -2825,7 +2825,6 @@ const showMuteIndicator = () => {
     muteIndicator.style.display = 'none';
   }
 };
- 
 const updateMediaMode = () => {
   mediaModeToggle.classList.toggle('audio', isAudioMode);
   mediaModeToggle.classList.toggle('video', !isAudioMode);
@@ -2853,25 +2852,19 @@ const toggleMediaMode = () => {
     throttledSaveState();
   }
 };
- 
-  // Función para actualizar el estado visual del toggle Audio/Video
 const updateModeToggleState = () => {
   const toggle = document.getElementById('mediaModeToggle');
-  if (!toggle) return; // Seguridad si el elemento no existe aún
+  if (!toggle) return;
   const left = toggle.querySelector('.mode-left');
   const right = toggle.querySelector('.mode-right');
-  // Resetear todas las clases relevantes
   toggle.classList.remove('disabled', 'audio', 'video', 'active-left', 'active-right');
   left.classList.remove('active');
   right.classList.remove('active');
-  // Caso 1: No hay video disponible (solo audio)
   if (!currentMedia || currentMedia.mediaType !== 'video') {
     toggle.classList.add('disabled');
-    toggle.classList.add('audio'); // Muestra como audio activo
+    toggle.classList.add('audio');
     left.classList.add('active');
-  }
-  // Caso 2: Hay video → se puede alternar
-  else {
+  } else {
     toggle.classList.remove('disabled');
     if (isAudioMode) {
       toggle.classList.add('audio', 'active-left');
@@ -2882,8 +2875,6 @@ const updateModeToggleState = () => {
     }
   }
 };
-
-// CORREGIDA: loadMedia - Maneja cola vacía -> recomendados, y click en recomendado
 const loadMedia = (mediaUrl, mediaType, coverUrlContainer, coverUrlInfo, title, detailUrl, author = 'Roberto', next = [], text = '', allowDownload = true, isFromRecomendados = false, recIndex = -1) => {
   try {
     currentEpisodeId = mediaUrl;
@@ -2926,20 +2917,15 @@ const loadMedia = (mediaUrl, mediaType, coverUrlContainer, coverUrlInfo, title, 
     episodeText = text;
     currentIndex = nextList.findIndex(item => item.mediaUrl === mediaUrl);
     if (currentIndex === -1) currentIndex = 0;
-
-    // NUEVO: Lógica para autoplay con recomendados
-    if (next.length === 0) { // Episodio único
+    if (next.length === 0) {
       if (isFromRecomendados && recIndex >= 0) {
-        // Click en recomendado: Continúa con el resto en orden
         nextList = cachedRecomendados.slice(recIndex + 1).map(mapEpisodeToMedia);
         activeList = 'next';
       } else {
-        // Cualquier único: Copia toda la lista de recomendados como cola
         nextList = cachedRecomendados.map(mapEpisodeToMedia);
         activeList = 'next';
       }
     }
-
     updateNextList();
     updateRecomendadosList();
     updateTextContent();
@@ -2959,13 +2945,12 @@ const loadMedia = (mediaUrl, mediaType, coverUrlContainer, coverUrlInfo, title, 
     isAudioMode = mediaType !== 'video';
     updateMediaMode();
     updateModeToggleState();
-    updateMediaSession(); // Fuerza actualización al cargar
+    updateMediaSession();
+    updateOpenPlayerButton(!mediaElement.paused);
   } catch (error) {
     console.error('Error loading media:', error);
   }
 };
- 
- 
 const updateDownloadButton = () => {
   if (currentMedia.allowDownload) {
     downloadBtn.classList.remove('disabled');
@@ -3063,7 +3048,7 @@ const updatePlaylist = () => {
         if (!e.target.closest('.remove-playlist-item') && !e.target.closest('.drag-handle') && !e.target.closest('.item-play-pause')) {
           e.stopPropagation();
           currentIndex = index;
-          loadMedia(item.mediaUrl, item.mediaType, item.coverUrlContainer, item.coverUrlInfo, item.title, item.detailUrl, item.author, item.next, item.text, item.allowDownload);
+          loadMedia(item.mediaUrl, item.mediaType, item.coverUrlContainer, item.coverUrlInfo, item.title, item.detailUrl, item.author, playlist, item.text, item.allowDownload);
           togglePlayPause(true);
           throttledSaveState();
         }
@@ -3072,7 +3057,7 @@ const updatePlaylist = () => {
         e.stopPropagation();
         if (item.mediaUrl !== currentMedia?.mediaUrl) {
           currentIndex = index;
-          loadMedia(item.mediaUrl, item.mediaType, item.coverUrlContainer, item.coverUrlInfo, item.title, item.detailUrl, item.author, item.next, item.text, item.allowDownload);
+          loadMedia(item.mediaUrl, item.mediaType, item.coverUrlContainer, item.coverUrlInfo, item.title, item.detailUrl, item.author, playlist, item.text, item.allowDownload);
         }
         togglePlayPause();
       });
@@ -3183,10 +3168,7 @@ const updateNextList = () => {
     nextItems.innerHTML = '<div class="no-items">Episodio único</div>';
   }
 };
-
-// CORREGIDA: updateRecomendadosList() - Cachea orden y maneja click para continuar en orden
 const updateRecomendadosList = () => {
-  // NUEVO: Cachea recomendados frescos cada vez que se actualiza la lista (pero preserva orden)
   if (cachedRecomendados.length === 0) {
     cachedRecomendados = [...window.RECOMENDADOS];
   }
@@ -3205,7 +3187,6 @@ const updateRecomendadosList = () => {
           </button>
         </div>
       `;
-      // CORREGIDO: Al click, carga como desde recomendados con index para continuar orden
       div.addEventListener('click', (e) => {
         e.stopPropagation();
         const mappedItem = mapEpisodeToMedia(item);
@@ -3220,8 +3201,8 @@ const updateRecomendadosList = () => {
           mappedItem.next,
           mappedItem.text,
           mappedItem.allowDownload,
-          true, // isFromRecomendados
-          index // recIndex
+          true,
+          index
         );
         togglePlayPause(true);
         throttledSaveState();
@@ -3369,10 +3350,12 @@ const togglePlayPause = (forcePlay = false) => {
   mediaElement.dataset.isToggling = 'true';
   if (forcePlay || mediaElement.paused) {
     playWithFallback();
+    updateOpenPlayerButton(true);
   } else {
     mediaElement.pause();
     updateIcons(false);
     updateAllItemIcons(false);
+    updateOpenPlayerButton(false);
   }
   checkMute();
   throttledSaveState();
@@ -3392,10 +3375,8 @@ const forward = (seconds = 15) => {
   showSeekIndicator('right', seconds);
   throttledSaveState();
 };
-
-// CORREGIDA: previous() - Prioridad: playlist > next > history
 const previous = () => {
-  if (repeatMode !== 0) return; // Solo en modo normal (autoplay)
+  if (repeatMode !== 0) return;
   if (activeList === 'playlist' && userPlaylistAutoPlay && currentIndex > 0) {
     currentIndex--;
     const item = playlist[currentIndex];
@@ -3415,10 +3396,8 @@ const previous = () => {
   }
   throttledSaveState();
 };
-
-// CORREGIDA: next() - Prioridad: cola > playlist (si autoplay) > recomendados (en orden cacheado)
 const next = () => {
-  if (repeatMode !== 0) return; // Solo en modo normal (autoplay)
+  if (repeatMode !== 0) return;
   if (activeList === 'next' && currentIndex < nextList.length - 1) {
     currentIndex++;
     const item = nextList[currentIndex];
@@ -3430,14 +3409,12 @@ const next = () => {
     loadMedia(item.mediaUrl, item.mediaType, item.coverUrlContainer, item.coverUrlInfo, item.title, item.detailUrl, item.author, playlist, item.text, item.allowDownload);
     togglePlayPause(true);
   } else if (userPlaylistAutoPlay && playlist.length > 0) {
-    // Reinicia playlist si autoplay activado
     activeList = 'playlist';
     currentIndex = 0;
     const item = playlist[currentIndex];
     loadMedia(item.mediaUrl, item.mediaType, item.coverUrlContainer, item.coverUrlInfo, item.title, item.detailUrl, item.author, playlist, item.text, item.allowDownload);
     togglePlayPause(true);
   } else if (cachedRecomendados.length > 0) {
-    // Continúa con el siguiente de recomendados (shift preserva orden)
     const nextRecItem = cachedRecomendados.shift();
     const mappedRec = mapEpisodeToMedia(nextRecItem);
     loadMedia(
@@ -3448,18 +3425,16 @@ const next = () => {
       mappedRec.title,
       mappedRec.detailUrl,
       mappedRec.author,
-      cachedRecomendados.map(mapEpisodeToMedia), // Resto como cola
+      cachedRecomendados.map(mapEpisodeToMedia),
       mappedRec.text,
       mappedRec.allowDownload,
-      true, // isFromRecomendados
-      0 // index 0 en la nueva cola
+      true,
+      0
     );
     togglePlayPause(true);
   }
   throttledSaveState();
 };
-
-// CORREGIDA: handleMediaEnd() - Similar a next(), pero con repeat
 const handleMediaEnd = () => {
   if (repeatMode === 2) {
     mediaElement.play();
@@ -3468,7 +3443,6 @@ const handleMediaEnd = () => {
     repeatMode = 0;
     updateRepeatButton();
   } else {
-    // Modo normal: autoplay según prioridad
     if (activeList === 'next' && currentIndex < nextList.length - 1) {
       currentIndex++;
       const nextItem = nextList[currentIndex];
@@ -3480,14 +3454,12 @@ const handleMediaEnd = () => {
       loadMedia(nextItem.mediaUrl, nextItem.mediaType, nextItem.coverUrlContainer, nextItem.coverUrlInfo, nextItem.title, nextItem.detailUrl, nextItem.author, playlist, nextItem.text, nextItem.allowDownload);
       togglePlayPause(true);
     } else if (userPlaylistAutoPlay && playlist.length > 0) {
-      // Reinicia playlist
       activeList = 'playlist';
       currentIndex = 0;
       const nextItem = playlist[currentIndex];
       loadMedia(nextItem.mediaUrl, nextItem.mediaType, nextItem.coverUrlContainer, nextItem.coverUrlInfo, nextItem.title, nextItem.detailUrl, nextItem.author, playlist, nextItem.text, nextItem.allowDownload);
       togglePlayPause(true);
     } else if (cachedRecomendados.length > 0) {
-      // Continúa con recomendados
       const nextRecItem = cachedRecomendados.shift();
       const mappedRec = mapEpisodeToMedia(nextRecItem);
       loadMedia(
@@ -3509,7 +3481,6 @@ const handleMediaEnd = () => {
   }
   throttledSaveState();
 };
-
 const handleMediaTap = (e) => {
   if (e.target.closest('button')) return;
   e.preventDefault();
@@ -3715,6 +3686,26 @@ const updateRepeatButton = () => {
   }
   repeatBtn.classList.toggle('repeat-active', repeatMode > 0);
 };
+// Actualiza ícono y texto del botón externo #openPlayerBtn
+const updateOpenPlayerButton = (isPlaying) => {
+  const openPlayerBtn = document.querySelector('#openPlayerBtn');
+  if (!openPlayerBtn) return;
+
+  const img = openPlayerBtn.querySelector('img');
+  const textSpan = openPlayerBtn.querySelector('span');
+
+  if (img && textSpan) {
+    if (isPlaying) {
+      img.src = 'https://nikichitonjes-home.odoo.com/web/image/477-973a1ff8/Escuchar.gif';
+      img.alt = 'Escuchando';
+      textSpan.textContent = 'Escuchando';
+    } else {
+      img.src = 'https://nikichitonjes-home.odoo.com/web/image/478-0e3df8d3/reanudar.gif';
+      img.alt = 'Escuchar';
+      textSpan.textContent = 'Escuchar';
+    }
+  }
+};
 mediaContainer.addEventListener('mouseenter', () => {
   if (isFullscreenMode) return;
   mediaContainer.classList.add('show-controls');
@@ -3726,8 +3717,16 @@ mediaContainer.addEventListener('touchend', handleFullscreenTap);
 mediaElement.addEventListener('timeupdate', updateProgress);
 mediaElement.addEventListener('loadedmetadata', updateProgress);
 mediaElement.addEventListener('ended', handleMediaEnd);
-mediaElement.addEventListener('play', () => { updateIcons(true); updateAllItemIcons(true); });
-mediaElement.addEventListener('pause', () => { updateIcons(false); updateAllItemIcons(false); });
+mediaElement.addEventListener('play', () => { 
+  updateIcons(true); 
+  updateAllItemIcons(true); 
+  updateOpenPlayerButton(true);
+});
+mediaElement.addEventListener('pause', () => { 
+  updateIcons(false); 
+  updateAllItemIcons(false); 
+  updateOpenPlayerButton(false);
+});
 mediaContainer.addEventListener('touchend', handleMediaTap);
 mediaContainer.addEventListener('click', handleMediaTap);
 speedContainer.addEventListener('click', (e) => {
@@ -3742,7 +3741,7 @@ speedContainer.addEventListener('touchend', (e) => {
 timerContainer.addEventListener('click', (e) => {
   e.stopPropagation();
   togglePanel('temporizador');
-  setTimeout(updateTimerView, 100); // Pequeño delay para asegurar que el panel esté abierto
+  setTimeout(updateTimerView, 100);
 });
 timerContainer.addEventListener('touchend', (e) => {
   e.stopPropagation();
@@ -3763,14 +3762,14 @@ timerOptions.querySelectorAll('button').forEach(btn => {
     setupTimer();
     togglePanel();
     throttledSaveState();
-      updateTimerView();
+    updateTimerView();
   });
 });
 deactivateTimer.addEventListener('click', (e) => {
   e.stopPropagation();
   resetTimer();
   togglePanel();
-    updateTimerView();
+  updateTimerView();
 });
 minimizeBtn.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -3825,7 +3824,7 @@ fullscreenBtn.addEventListener('click', (e) => {
     document.exitFullscreen().then(() => {
       isFullscreenMode = false;
       fullscreenControls.style.display = 'none';
-      loadImageWithFallback(fullscreenBtn.querySelector('img'), 'https://www.nikichitonjesus.org/web/image/465-b35c8fea/full.webp', 'Fullscreen', 'https://via.placeholder.com/24');
+      loadImageWithFallback(fullscreenBtn.querySelector('img'), 'https://media.baltaanay.org/web/image/883-49c31be4/full.png', 'Fullscreen', 'https://via.placeholder.com/24');
       overlayGradient.style.display = 'flex';
     });
   }
@@ -3848,7 +3847,7 @@ document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement) {
     isFullscreenMode = false;
     fullscreenControls.style.display = 'none';
-    loadImageWithFallback(fullscreenBtn.querySelector('img'), 'https://www.nikichitonjesus.org/web/image/465-b35c8fea/full.webp', 'Fullscreen', 'https://via.placeholder.com/24');
+    loadImageWithFallback(fullscreenBtn.querySelector('img'), 'https://media.baltaanay.org/web/image/883-49c31be4/full.png', 'Fullscreen', 'https://via.placeholder.com/24');
     overlayGradient.style.display = 'flex';
     clearTimeout(autoHideTimer);
   } else {
@@ -4064,7 +4063,7 @@ playUserPlaylistBtn.addEventListener('click', (e) => {
     activeList = 'playlist';
     currentIndex = 0;
     const item = playlist[currentIndex];
-    loadMedia(item.mediaUrl, item.mediaType, item.coverUrlContainer, item.coverUrlInfo, item.title, item.detailUrl, item.author, playlist, item.text, item.allowDownload); // Usa playlist como next
+    loadMedia(item.mediaUrl, item.mediaType, item.coverUrlContainer, item.coverUrlInfo, item.title, item.detailUrl, item.author, playlist, item.text, item.allowDownload);
     togglePlayPause(true);
   } else if (!userPlaylistAutoPlay) {
     activeList = 'next';
@@ -4289,9 +4288,9 @@ document.addEventListener('visibilitychange', () => {
     mediaElement.pause();
     updateIcons(false);
     updateAllItemIcons(false);
+    updateOpenPlayerButton(false);
   }
 });
-// Evitar que clics en el panel cierren o afecten al reproductor
 panelContainer.addEventListener('click', (e) => {
   e.stopPropagation();
 });
@@ -4309,6 +4308,7 @@ window.addEventListener('load', () => {
   updateTextContent();
   checkTitleOverflow();
   checkMinimizedTitleOverflow();
+  updateOpenPlayerButton(!mediaElement.paused);
 });
 window.addEventListener('popstate', () => {
   throttledSaveState();
@@ -4330,15 +4330,10 @@ window.togglePlayer = () => {
     };
     loadMedia(programa.mediaUrl, programa.mediaType, programa.coverUrlContainer, programa.coverUrlInfo, programa.title, programa.detailUrl, programa.author, [], programa.text, programa.allowDownload);
     togglePlayPause(true);
+    showExpanded();
     throttledSaveState();
   } else {
-    if (isHidden) {
-      showMinimized();
-    } else if (isExpanded) {
-      showMinimized();
-    } else {
-      showExpanded();
-    }
+    showExpanded();
   }
 };
 window.playEpisode = (mediaUrl, mediaType = 'audio', coverUrlContainer = '', coverUrlInfo = '', title = '', detailUrl = '', author = 'Roberto', next = [], text = '', allowDownload = true) => {
@@ -4354,14 +4349,12 @@ window.playEpisodeExpanded = (mediaUrl, mediaType = 'audio', coverUrlContainer =
   window.playEpisode(mediaUrl, mediaType, coverUrlContainer, coverUrlInfo, title, detailUrl, author, next, text, allowDownload);
   showExpanded();
 };
-// CORREGIDA: playExpanded - Ahora soporta episodios de RECOMENDADOS con orden
 window.playExpanded = (episodioObj) => {
   if (!episodioObj) return;
-  // Si es de RECOMENDADOS, mapea y busca index para continuar
   let mapped = episodioObj;
   let isFromRec = false;
   let recIndex = -1;
-  if (episodioObj.type && !episodioObj.mediaType) {  // Detecta si es de recomendados
+  if (episodioObj.type && !episodioObj.mediaType) {
     mapped = mapEpisodeToMedia(episodioObj);
     recIndex = cachedRecomendados.findIndex(r => r.mediaUrl === episodioObj.mediaUrl);
     if (recIndex >= 0) isFromRec = true;
@@ -4378,10 +4371,6 @@ window.playExpanded = (episodioObj) => {
     mapped.text || '',
     mapped.allowDownload ?? true
   );
-  // Si es de recomendados, ajusta en loadMedia via params extras
-  if (isFromRec) {
-    // Nota: loadMedia maneja isFromRecomendados y recIndex
-  }
 };
 window.addToUserPlaylist = (obj) => {
   if (!obj || !obj.mediaUrl) return false;
@@ -4411,7 +4400,6 @@ window.playEpisodeMinimized = (mediaUrl, mediaType = 'audio', coverUrlContainer 
   togglePlayPause(true);
   showMinimized();
 };
-// === MEDIA SESSION API - PERSONALIZACIÓN DEFINITIVA ===
 const updateMediaSession = () => {
   if (!('mediaSession' in navigator)) {
     console.log('[MediaSession] No soportada en este navegador');
@@ -4455,7 +4443,6 @@ const updateMediaSession = () => {
     console.error('[MediaSession] Error:', err.message);
   }
 };
-// Integración automática
 mediaElement.addEventListener('play', updateMediaSession);
 mediaElement.addEventListener('pause', updateMediaSession);
 mediaElement.addEventListener('loadedmetadata', updateMediaSession);
@@ -4468,13 +4455,12 @@ mediaElement.addEventListener('timeupdate', () => {
     });
   }
 });
-// Limpieza opcional
 window.addEventListener('beforeunload', () => {
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = null;
   }
 });
 </script>
-  
+
 </body>
 </html>
