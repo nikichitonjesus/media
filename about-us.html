@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acerca de Nosotros - Mi Sitio en GitHub</title>
+    <style>
+        /* Estilos generales para un diseño profesional y limpio */
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        header {
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+            padding: 50px 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            animation: fadeIn 1s ease-in;
+        }
+
+        section {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: #007bff;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        /* Animaciones para interactividad */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Timeline interactiva */
+        .timeline {
+            position: relative;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .timeline::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            background-color: #007bff;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            margin-left: -3px;
+        }
+
+        .timeline-item {
+            padding: 10px 40px;
+            position: relative;
+            background-color: inherit;
+            width: 50%;
+        }
+
+        .timeline-item::after {
+            content: '';
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            right: -17px;
+            background-color: white;
+            border: 4px solid #007bff;
+            top: 15px;
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        .left {
+            left: 0;
+        }
+
+        .right {
+            left: 50%;
+        }
+
+        .right::after {
+            left: -16px;
+        }
+
+        .content {
+            padding: 20px 30px;
+            background-color: white;
+            position: relative;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .content:hover {
+            transform: scale(1.05);
+        }
+
+        /* Cards para el equipo */
+        .team {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+
+        .team-member {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin: 20px;
+            padding: 20px;
+            text-align: center;
+            width: 250px;
+            transition: box-shadow 0.3s ease, transform 0.3s ease;
+        }
+
+        .team-member:hover {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transform: translateY(-5px);
+        }
+
+        .team-member img {
+            border-radius: 50%;
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            margin-bottom: 15px;
+        }
+
+        /* Acordeón para valores */
+        .accordion {
+            background-color: #eee;
+            color: #444;
+            cursor: pointer;
+            padding: 18px;
+            width: 100%;
+            border: none;
+            text-align: left;
+            outline: none;
+            font-size: 15px;
+            transition: 0.4s;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        .active, .accordion:hover {
+            background-color: #ccc;
+        }
+
+        .panel {
+            padding: 0 18px;
+            display: none;
+            background-color: white;
+            overflow: hidden;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        /* Responsive design */
+        @media screen and (max-width: 768px) {
+            .timeline::after {
+                left: 31px;
+            }
+
+            .timeline-item {
+                width: 100%;
+                padding-left: 70px;
+                padding-right: 25px;
+            }
+
+            .timeline-item::after {
+                left: 15px;
+            }
+
+            .right {
+                left: 0%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Acerca de Nosotros</h1>
+        <p>Descubre quiénes somos, nuestra historia y lo que nos impulsa.</p>
+    </header>
+
+    <section id="introduccion">
+        <h2>¿Quiénes Somos?</h2>
+        <p>Somos un equipo apasionado por la tecnología y la innovación, dedicado a crear soluciones impactantes a través de nuestro sitio en GitHub. Nuestro enfoque está en el desarrollo open-source, colaborando con la comunidad para construir un futuro mejor.</p>
+    </section>
+
+    <section id="historia">
+        <h2>Nuestra Historia</h2>
+        <div class="timeline">
+            <div class="timeline-item left">
+                <div class="content">
+                    <h3>2018</h3>
+                    <p>Fundación del proyecto. Comenzamos como un pequeño equipo de entusiastas en Guatemala.</p>
+                </div>
+            </div>
+            <div class="timeline-item right">
+                <div class="content">
+                    <h3>2020</h3>
+                    <p>Lanzamiento de nuestro primer repositorio open-source, recibiendo contribuciones globales.</p>
+                </div>
+            </div>
+            <div class="timeline-item left">
+                <div class="content">
+                    <h3>2022</h3>
+                    <p>Expansión del equipo y colaboración con empresas tech.</p>
+                </div>
+            </div>
+            <div class="timeline-item right">
+                <div class="content">
+                    <h3>2026</h3>
+                    <p>Hoy en día, seguimos innovando y creciendo en la comunidad GitHub.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="equipo">
+        <h2>Nuestro Equipo</h2>
+        <div class="team">
+            <div class="team-member">
+                <img src="https://via.placeholder.com/150" alt="Miembro 1">
+                <h3>Baltazar</h3>
+                <p>Fundador y Desarrollador Principal</p>
+            </div>
+            <div class="team-member">
+                <img src="https://via.placeholder.com/150" alt="Miembro 2">
+                <h3>Equipo Miembro 2</h3>
+                <p>Diseñador UI/UX</p>
+            </div>
+            <div class="team-member">
+                <img src="https://via.placeholder.com/150" alt="Miembro 3">
+                <h3>Equipo Miembro 3</h3>
+                <p>Ingeniero de Software</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="valores">
+        <h2>Nuestros Valores</h2>
+        <button class="accordion">Innovación</button>
+        <div class="panel">
+            <p>Nos esforzamos por estar a la vanguardia de la tecnología, creando soluciones creativas y eficientes.</p>
+        </div>
+
+        <button class="accordion">Colaboración</button>
+        <div class="panel">
+            <p>Creemos en el poder del trabajo en equipo y la comunidad open-source.</p>
+        </div>
+
+        <button class="accordion">Integridad</button>
+        <div class="panel">
+            <p>Mantenemos estándares éticos altos en todo lo que hacemos.</p>
+        </div>
+    </section>
+
+    <section id="contacto">
+        <h2>Contáctanos</h2>
+        <p>Si deseas colaborar o saber más, envíanos un mensaje a través de GitHub o por email: contacto@misitio.com</p>
+    </section>
+
+    <script>
+        // Script para el acordeón interactivo
+        var acc = document.getElementsByClassName("accordion");
+        for (var i = 0; i < acc.length; i++) {
+            acc[i].addEventListener("click", function() {
+                this.classList.toggle("active");
+                var panel = this.nextElementSibling;
+                if (panel.style.display === "block") {
+                    panel.style.display = "none";
+                } else {
+                    panel.style.display = "block";
+                }
+            });
+        }
+    </script>
+
+</body>
+</html>
