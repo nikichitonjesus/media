@@ -51,7 +51,9 @@ export const series = [
         portada_serie: 'https://balta-media.odoo.com/web/image/1031-a693e9ca/Pueblos%20ind%C3%ADgenas.webp',
         titulo_serie: 'Derecho de los pueblos indígenas',
         descripcion_serie: 'Los derechos de tercera generación. Desarrolla los derechos de los pueblos indígenas o también conocidos como derechos de solidaridad.',
-        url_serie: '/dp-indigenas'
+        url_serie: '/dp-indigenas',
+        bgColor: '#cc04ab'
+        
     },
     {
         seriesid: "derecho-laboral-1",
@@ -178,7 +180,8 @@ const episodiosBase = [
         author: "Raymundo",
         description: "La crisis del Estado de Derecho. Por Lic. Raymundo Catz. El estado de derecho en crisis por los derechos de segunda y tercera generación.",
         allowDownload: false,
-        seriesid: "dp-indigenas"
+        seriesid: "dp-indigenas",
+        bgColor: '#cc04ab'
     },
     {
         id: "conceptos-basicos-ddhh",
@@ -189,7 +192,8 @@ const episodiosBase = [
         author: "Raymundo",
         description: "Conceptos básicos de los Derechos Humanos",
         allowDownload: false,
-        seriesid: "dp-indigenas"
+        seriesid: "dp-indigenas",
+        bgColor: '#cc04ab'
     },
     {
         id: "racismo-despojo",
@@ -201,7 +205,8 @@ const episodiosBase = [
         description: "Continuidad del tema: El despojo en Guatemala de las tierras indígenas. Y un análisis del racismo en Guatemala. Guerra, conflicto",
         allowDownload: false,
         seriesid: "dp-indigenas",
-        detailUrl: '/dp-indigenas/despojo-y-racismo'
+        detailUrl: '/dp-indigenas/despojo-y-racismo',
+        bgColor: '#cc04ab'
     },
     {
         id: "antecedentes-derecho-trabajo",
