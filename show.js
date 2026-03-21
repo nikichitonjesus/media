@@ -1,4 +1,4 @@
-// show.js - Vistas del feed, episodio, serie, etc. - VERSIÓN DEFINITIVA CON CAPTURA DE EVENTOS
+// show.js - Vistas del feed, episodio, serie, etc. - VERSIÓN DEFINITIVA 2026 MODERNIZADA
 import { getAllEpisodios, getSerieById, getEpisodiosBySerieId, getEpisodiosConSerie } from './episodios.js';
 import { userStorage } from './storage.js';
 import './player.js';
@@ -11,7 +11,8 @@ const ICONS = {
     added: 'https://nikichitonjesus.odoo.com/web/image/1112-d141b3eb/a%C3%B1adido.png',
     dl: 'https://marca1.odoo.com/web/image/510-7a9035c1/descargar.svg',
     noDl: 'https://nikichitonjesus.odoo.com/web/image/1051-622a3db3/no-desc.webp',
-    share: 'https://nikichitonjesus.odoo.com/web/image/585-036b7961/cpmartir.png'
+    share: 'https://nikichitonjesus.odoo.com/web/image/585-036b7961/cpmartir.png',
+    buyPremium: 'https://balta-media.odoo.com/web/image/879-360eccc9/Sotore.webp'
 };
 
 const CATEGORIES = [
@@ -21,7 +22,7 @@ const CATEGORIES = [
     "Tecnología e Informática", "Otras Ciencias"
 ];
 
-// ---------- ESTILOS GLOBALES (fondo degradado) ----------
+// ---------- ESTILOS GLOBALES (fondo degradado + azul marino elegante) ----------
 const GLOBAL_STYLES = `
     <style>
         body {
@@ -35,11 +36,20 @@ const GLOBAL_STYLES = `
             background: rgba(255, 255, 255, 0.03);
             backdrop-filter: blur(2px);
         }
+        .btn-primary {
+            background: #0369a1 !important;
+        }
+        .btn-primary:hover {
+            background: #075985 !important;
+        }
         .carousel-double .flex-col {
             gap: 0.75rem;
         }
         .carousel-double .card-std {
             margin-bottom: 0;
+        }
+        .premium-overlay {
+            background: rgba(139, 92, 246, 0.3);
         }
     </style>
 `;
@@ -93,21 +103,21 @@ export function createStandardCard(ep) {
     const inPlaylist = userStorage.playlist.has(ep.id);
     const addIcon = inPlaylist ? ICONS.added : ICONS.add;
     const dlIcon = ep.allowDownload ? ICONS.dl : ICONS.noDl;
-    return `<div class="card-std group" data-episodio-id="${ep.id}">
+    const isPremium = ep.premium === 'true';
+
+    return `<div class="card-std group relative" data-episodio-id="${ep.id}">
         <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-zinc-800/50 cursor-pointer" onclick="window.goToDetail('${ep.detailUrl}')">
             <img src="${ep.coverUrl}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
-            <div class="overlay-full">
+            <div class="overlay-full ${isPremium ? 'premium-overlay' : ''}">
+                ${isPremium ? '' : `<img src="${dlIcon}" class="action-icon" data-episodio-id="${ep.id}" title="${ep.allowDownload ? 'Descargar' : 'No disponible'}">`}
                 <img src="${addIcon}" class="action-icon" data-episodio-id="${ep.id}" data-added="${inPlaylist}">
-                <img src="${ICONS.play}" class="play-icon-lg" data-episodio-id="${ep.id}">
-                <img src="${dlIcon}" class="action-icon" data-episodio-id="${ep.id}" title="${ep.allowDownload ? 'Descargar' : 'Descarga no disponible'}">
+                ${!isPremium ? `<img src="${ICONS.play}" class="play-icon-lg" data-episodio-id="${ep.id}">` : ''}
             </div>
-            <div class="mobile-play-button" data-episodio-id="${ep.id}">
-                <img src="${ICONS.play}" alt="Play">
-            </div>
+            ${isPremium ? `<div class="absolute inset-0 flex items-center justify-center bg-black/60 text-white font-bold text-lg">Premium</div>` : ''}
         </div>
-        <div onclick="window.goToDetail('${ep.detailUrl}')" class="cursor-pointer">
+        <div onclick="window.goToDetail('${ep.detailUrl}')" class="cursor-pointer mt-2">
             <h3 class="font-bold text-white text-sm truncate hover:text-blue-400 transition-colors">${ep.title}</h3>
-            <p class="text-xs text-gray-400 mt-1 truncate">${ep.author}</p>
+            <p class="text-xs text-gray-400 truncate">${ep.author}</p>
         </div>
     </div>`;
 }
@@ -116,21 +126,21 @@ export function createVerticalCard(ep) {
     const inPlaylist = userStorage.playlist.has(ep.id);
     const addIcon = inPlaylist ? ICONS.added : ICONS.add;
     const dlIcon = ep.allowDownload ? ICONS.dl : ICONS.noDl;
-    return `<div class="card-std group" data-episodio-id="${ep.id}">
+    const isPremium = ep.premium === 'true';
+
+    return `<div class="card-std group relative" data-episodio-id="${ep.id}">
         <div class="relative w-full aspect-[4/5] rounded-xl overflow-hidden bg-zinc-800/50 cursor-pointer" onclick="window.goToDetail('${ep.detailUrl}')">
             <img src="${ep.coverUrl}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
-            <div class="overlay-full">
+            <div class="overlay-full ${isPremium ? 'premium-overlay' : ''}">
+                ${isPremium ? '' : `<img src="${dlIcon}" class="action-icon" data-episodio-id="${ep.id}">`}
                 <img src="${addIcon}" class="action-icon" data-episodio-id="${ep.id}" data-added="${inPlaylist}">
-                <img src="${ICONS.play}" class="play-icon-lg" data-episodio-id="${ep.id}">
-                <img src="${dlIcon}" class="action-icon" data-episodio-id="${ep.id}" title="${ep.allowDownload ? 'Descargar' : 'Descarga no disponible'}">
+                ${!isPremium ? `<img src="${ICONS.play}" class="play-icon-lg" data-episodio-id="${ep.id}">` : ''}
             </div>
-            <div class="mobile-play-button" data-episodio-id="${ep.id}">
-                <img src="${ICONS.play}" alt="Play">
-            </div>
+            ${isPremium ? `<div class="absolute inset-0 flex items-center justify-center bg-black/60 text-white font-bold text-lg">Premium</div>` : ''}
         </div>
-        <div onclick="window.goToDetail('${ep.detailUrl}')" class="cursor-pointer">
+        <div onclick="window.goToDetail('${ep.detailUrl}')" class="cursor-pointer mt-2">
             <h3 class="font-bold text-white text-sm truncate hover:text-blue-400 transition-colors">${ep.title}</h3>
-            <p class="text-xs text-gray-400 mt-1 truncate">${ep.author}</p>
+            <p class="text-xs text-gray-400 truncate">${ep.author}</p>
         </div>
     </div>`;
 }
@@ -139,18 +149,17 @@ export function createVideoExpand(ep) {
     const inPlaylist = userStorage.playlist.has(ep.id);
     const addIcon = inPlaylist ? ICONS.added : ICONS.add;
     const dlIcon = ep.allowDownload ? ICONS.dl : ICONS.noDl;
-    const coverWide = ep.coverWide && ep.coverWide !== ep.coverUrl ? ep.coverWide : ep.coverUrl;
-    return `<div class="card-video group" data-episodio-id="${ep.id}">
+    const isPremium = ep.premium === 'true';
+
+    return `<div class="card-video group relative" data-episodio-id="${ep.id}">
         <img src="${ep.coverUrl}" class="absolute inset-0 w-full h-full object-cover z-10 group-hover:opacity-0 transition-opacity duration-300">
-        <img src="${coverWide}" class="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-        <div class="overlay-full z-20">
+        <img src="${ep.coverUrl}" class="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <div class="overlay-full z-20 ${isPremium ? 'premium-overlay' : ''}">
+            ${isPremium ? '' : `<img src="${dlIcon}" class="action-icon" data-episodio-id="${ep.id}">`}
             <img src="${addIcon}" class="action-icon" data-episodio-id="${ep.id}" data-added="${inPlaylist}">
-            <img src="${ICONS.play}" class="play-icon-lg" data-episodio-id="${ep.id}">
-            <img src="${dlIcon}" class="action-icon" data-episodio-id="${ep.id}" title="${ep.allowDownload ? 'Descargar' : 'Descarga no disponible'}">
+            ${!isPremium ? `<img src="${ICONS.play}" class="play-icon-lg" data-episodio-id="${ep.id}">` : ''}
         </div>
-        <div class="mobile-play-button z-30" data-episodio-id="${ep.id}">
-            <img src="${ICONS.play}" alt="Play">
-        </div>
+        ${isPremium ? `<div class="absolute inset-0 flex items-center justify-center bg-black/60 text-white font-bold text-lg z-30">Premium</div>` : ''}
         <div class="absolute bottom-2 left-2 z-20 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-bold border border-white/10">VIDEO</div>
     </div>`;
 }
@@ -158,6 +167,7 @@ export function createVideoExpand(ep) {
 export function createListItem(ep, idx) {
     const inPlaylist = userStorage.playlist.has(ep.id);
     const addIcon = inPlaylist ? ICONS.added : ICONS.add;
+    const isPremium = ep.premium === 'true';
 
     return `
         <div class="list-item group flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors w-full"
@@ -168,7 +178,7 @@ export function createListItem(ep, idx) {
                 <img src="${ep.coverUrl}" class="w-full h-full object-cover" loading="lazy">
                 <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
                      data-episodio-id="${ep.id}">
-                    <img src="${ICONS.play}" class="w-5 h-5">
+                    ${!isPremium ? `<img src="${ICONS.play}" class="w-5 h-5">` : '<span class="text-white text-xs">Premium</span>'}
                 </div>
             </div>
             <div class="flex-1 min-w-0">
@@ -189,20 +199,20 @@ export function createGridCard(item) {
     const inPlaylist = userStorage.playlist.has(item.id);
     const addIcon = inPlaylist ? ICONS.added : ICONS.add;
     const dlIcon = item.allowDownload ? ICONS.dl : ICONS.noDl;
+    const isPremium = item.premium === 'true';
+
     return `
-        <div class="grid-card group" data-episodio-id="${item.id}">
+        <div class="grid-card group relative" data-episodio-id="${item.id}">
             <div class="aspect-square bg-zinc-800/50 relative rounded-xl overflow-hidden cursor-pointer" onclick="window.goToDetail('${item.detailUrl}')">
                 <img src="${item.coverUrl}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
-                <div class="overlay-full">
+                <div class="overlay-full ${isPremium ? 'premium-overlay' : ''}">
+                    ${isPremium ? '' : `<img src="${dlIcon}" class="action-icon" data-episodio-id="${item.id}">`}
                     <img src="${addIcon}" class="action-icon" data-episodio-id="${item.id}" data-added="${inPlaylist}">
-                    <img src="${ICONS.play}" class="play-icon-lg" data-episodio-id="${item.id}">
-                    <img src="${dlIcon}" class="action-icon" data-episodio-id="${item.id}" title="${item.allowDownload ? 'Descargar' : 'Descarga no disponible'}">
+                    ${!isPremium ? `<img src="${ICONS.play}" class="play-icon-lg" data-episodio-id="${item.id}">` : ''}
                 </div>
-                <div class="mobile-play-button" data-episodio-id="${item.id}">
-                    <img src="${ICONS.play}" alt="Play">
-                </div>
+                ${isPremium ? `<div class="absolute inset-0 flex items-center justify-center bg-black/60 text-white font-bold text-lg">Premium</div>` : ''}
             </div>
-            <div onclick="window.goToDetail('${item.detailUrl}')" class="cursor-pointer">
+            <div onclick="window.goToDetail('${item.detailUrl}')" class="cursor-pointer mt-2">
                 <h4 class="font-bold text-sm text-white truncate hover:text-blue-400 transition-colors">${item.title}</h4>
                 <p class="text-xs text-gray-500 truncate">${item.author}</p>
             </div>
@@ -216,7 +226,7 @@ function createCarousel(title, type, items, categoryContext, viewAllType = 'cate
     const id = 'c-' + Math.random().toString(36).substr(2, 9);
     let content = '';
     let extraClass = '';
-    
+
     if (type === 'double') {
         extraClass = 'carousel-double';
         content = `<div id="${id}" class="flex flex-col flex-wrap h-[580px] gap-x-6 gap-y-3 overflow-x-auto no-scrollbar scroll-smooth">` +
@@ -246,7 +256,7 @@ function createCarousel(title, type, items, categoryContext, viewAllType = 'cate
             items.map(ep => createStandardCard(ep)).join('') +
             `</div>`;
     }
-    
+
     let verTodoHandler;
     if (viewAllType === 'series') {
         verTodoHandler = `window.showSeriesGrid('${title}')`;
@@ -256,7 +266,7 @@ function createCarousel(title, type, items, categoryContext, viewAllType = 'cate
         const itemIds = JSON.stringify(items.map(ep => ep.id));
         verTodoHandler = `window.showItemsGrid('${title}', ${itemIds})`;
     }
-    
+
     return `<section class="carousel-wrapper relative group/section mb-8 sm:mb-12 ${extraClass}">
         <div class="flex items-end justify-between mb-3 sm:mb-5 px-1">
             <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-white hover:text-blue-400 transition-colors cursor-pointer" onclick="${verTodoHandler}">${title}</h2>
@@ -282,15 +292,15 @@ function createSeriesCarousel() {
             seriesGroups[serieKey].episodes.push(ep);
         }
     });
-    
+
     let seriesArray = Object.entries(seriesGroups).map(([key, value]) => ({ key, ...value }));
     for (let i = seriesArray.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [seriesArray[i], seriesArray[j]] = [seriesArray[j], seriesArray[i]];
     }
-    
+
     if (seriesArray.length === 0) return '';
-    
+
     let content = `<div id="${id}" class="flex gap-4 sm:gap-8 overflow-x-auto no-scrollbar scroll-smooth pb-4">`;
     seriesArray.forEach(group => {
         group.episodes.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -313,7 +323,7 @@ function createSeriesCarousel() {
         </div>`;
     });
     content += `</div>`;
-    
+
     return `<section class="carousel-wrapper relative group/section mb-8 sm:mb-12">
         <div class="flex items-end justify-between mb-3 sm:mb-5 px-1">
             <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-white hover:text-blue-400 transition-colors cursor-pointer" onclick="window.showSeriesGrid('Series y Cursos Académicos')">Series y Cursos Académicos</h2>
@@ -327,6 +337,19 @@ function createSeriesCarousel() {
     </section>`;
 }
 
+// ---------- CARRUSEL DE RECOMENDADOS ----------
+function createRecommendedCarousel(currentEp) {
+    if (!currentEp) return '';
+    const similar = DATA
+        .filter(e => e.id !== currentEp.id && e.categories.some(c => currentEp.categories.includes(c)))
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 8);
+
+    if (similar.length === 0) return '';
+
+    return createCarousel("Te puede interesar", "standard", similar, null, 'items');
+}
+
 // ---------- VISTAS DE DETALLE ----------
 export function renderEpisodio(container, episodioId) {
     try {
@@ -337,8 +360,10 @@ export function renderEpisodio(container, episodioId) {
         }
         const inPlaylist = userStorage.playlist.has(ep.id);
         const addIcon = inPlaylist ? ICONS.added : ICONS.add;
+        const isPremium = ep.premium === 'true';
+
         const html = `
-            <div class="detail-view w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="detail-view w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6" style="background: linear-gradient(135deg, ${ep.bgColor}20 0%, #0a0a0a 100%); min-height: 100vh;">
                 <div class="episode-header mb-8">
                     <div class="block lg:hidden">
                         <div class="relative w-full aspect-square max-w-[300px] mx-auto mb-6 rounded-3xl overflow-hidden shadow-2xl">
@@ -348,17 +373,26 @@ export function renderEpisodio(container, episodioId) {
                         <p class="text-lg text-gray-300 mb-3">${ep.author}</p>
                         <p class="text-gray-400 mb-6 leading-relaxed">${ep.description}</p>
                         <div class="flex items-center gap-3 mb-8">
-                            <button class="flex-1 bg-[#7b2eda] hover:bg-[#8f3ef0] rounded-2xl py-4 px-6 flex items-center justify-center gap-3 transition transform hover:scale-[1.02]" data-episodio-id="${ep.id}" data-action="play">
-                                <img src="${ICONS.play}" class="w-6 h-6 icon-white">
-                                <span class="font-bold">Reproducir</span>
-                            </button>
+                            ${isPremium ? `
+                                <button class="flex-1 btn-primary rounded-2xl py-4 px-6 flex items-center justify-center gap-3 transition transform hover:scale-[1.02]" onclick="window.location.href='/premium'">
+                                    <img src="${ICONS.buyPremium}" class="w-6 h-6">
+                                    <span class="font-bold">Comprar Premium</span>
+                                </button>
+                            ` : `
+                                <button class="flex-1 btn-primary rounded-2xl py-4 px-6 flex items-center justify-center gap-3 transition transform hover:scale-[1.02]" data-episodio-id="${ep.id}" data-action="play">
+                                    <img src="${ICONS.play}" class="w-6 h-6 icon-white">
+                                    <span class="font-bold">Reproducir</span>
+                                </button>
+                            `}
                             <button class="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" data-episodio-id="${ep.id}" data-action="add">
                                 <img src="${addIcon}" class="w-6 h-6 icon-white" data-episodio-id="${ep.id}" data-added="${inPlaylist}">
                             </button>
-                            <button class="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" data-episodio-id="${ep.id}" data-action="dl">
-                                <img src="${ep.allowDownload ? ICONS.dl : ICONS.noDl}" class="w-6 h-6 icon-white">
-                            </button>
-                            <button class="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" onclick="window.shareContent('${ep.title}', '${ep.detailUrl}')">
+                            ${!isPremium && ep.allowDownload ? `
+                                <button class="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" data-episodio-id="${ep.id}" data-action="dl">
+                                    <img src="${ICONS.dl}" class="w-6 h-6 icon-white">
+                                </button>
+                            ` : ''}
+                            <button class="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" onclick="window.shareContent('${ep.title}', '${ep.detailUrl}', '${ep.coverUrl}', '${ep.description}')">
                                 <img src="${ICONS.share}" class="w-6 h-6 icon-white">
                             </button>
                         </div>
@@ -374,17 +408,26 @@ export function renderEpisodio(container, episodioId) {
                                 <p class="text-xl text-gray-300 mb-4">${ep.author}</p>
                                 <p class="text-gray-400 max-w-3xl leading-relaxed">${ep.description}</p>
                                 <div class="flex items-center gap-4 mt-8">
-                                    <button class="bg-[#7b2eda] hover:bg-[#8f3ef0] rounded-2xl py-4 px-8 flex items-center gap-3 transition transform hover:scale-105" data-episodio-id="${ep.id}" data-action="play">
-                                        <img src="${ICONS.play}" class="w-6 h-6 icon-white">
-                                        <span class="font-bold text-lg">Reproducir</span>
-                                    </button>
+                                    ${isPremium ? `
+                                        <button class="btn-primary flex-1 rounded-2xl py-4 px-8 flex items-center gap-3 transition transform hover:scale-105" onclick="window.location.href='/premium'">
+                                            <img src="${ICONS.buyPremium}" class="w-6 h-6">
+                                            <span class="font-bold text-lg">Comprar Premium</span>
+                                        </button>
+                                    ` : `
+                                        <button class="btn-primary rounded-2xl py-4 px-8 flex items-center gap-3 transition transform hover:scale-105" data-episodio-id="${ep.id}" data-action="play">
+                                            <img src="${ICONS.play}" class="w-6 h-6 icon-white">
+                                            <span class="font-bold text-lg">Reproducir</span>
+                                        </button>
+                                    `}
                                     <button class="w-14 h-14 rounded-2xl bg-black/40 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" data-episodio-id="${ep.id}" data-action="add" title="Añadir a lista">
                                         <img src="${addIcon}" class="w-6 h-6 icon-white" data-episodio-id="${ep.id}" data-added="${inPlaylist}">
                                     </button>
-                                    <button class="w-14 h-14 rounded-2xl bg-black/40 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" data-episodio-id="${ep.id}" data-action="dl" title="${ep.allowDownload ? 'Descargar' : 'Descarga no disponible'}">
-                                        <img src="${ep.allowDownload ? ICONS.dl : ICONS.noDl}" class="w-6 h-6 icon-white">
-                                    </button>
-                                    <button class="w-14 h-14 rounded-2xl bg-black/40 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" onclick="window.shareContent('${ep.title}', '${ep.detailUrl}')" title="Compartir">
+                                    ${!isPremium && ep.allowDownload ? `
+                                        <button class="w-14 h-14 rounded-2xl bg-black/40 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" data-episodio-id="${ep.id}" data-action="dl" title="Descargar">
+                                            <img src="${ICONS.dl}" class="w-6 h-6 icon-white">
+                                        </button>
+                                    ` : ''}
+                                    <button class="w-14 h-14 rounded-2xl bg-black/40 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" onclick="window.shareContent('${ep.title}', '${ep.detailUrl}', '${ep.coverUrl}', '${ep.description}')" title="Compartir">
                                         <img src="${ICONS.share}" class="w-6 h-6 icon-white">
                                     </button>
                                 </div>
@@ -393,20 +436,22 @@ export function renderEpisodio(container, episodioId) {
                     </div>
                 </div>
                 ${ep.series ? `
-                <div class="part-of-program mt-8 lg:mt-12 p-6 lg:p-8 bg-white/5 backdrop-blur rounded-3xl border border-white/10">
-                    <h3 class="text-xl lg:text-2xl font-bold mb-6">Parte del programa</h3>
-                    <div class="program-card flex flex-col sm:flex-row items-start sm:items-center gap-6 cursor-pointer group" onclick="window.goToDetail('${ep.series.url_serie}')">
-                        <img src="${ep.series.portada_serie}" class="w-24 h-24 rounded-2xl object-cover shadow-lg group-hover:scale-105 transition-transform" alt="${ep.series.titulo_serie}">
-                        <div>
-                            <h3 class="text-xl lg:text-2xl font-bold group-hover:text-blue-400 transition-colors">${ep.series.titulo_serie}</h3>
-                            <p class="text-gray-400 mt-1 line-clamp-2">${ep.series.descripcion_serie}</p>
-                            <p class="text-[#7b2eda] font-semibold mt-3 flex items-center gap-1">
-                                Ver más episodios <span class="text-lg">→</span>
-                            </p>
+                    <div class="part-of-program mt-8 lg:mt-12 p-6 lg:p-8 bg-white/5 backdrop-blur rounded-3xl border border-white/10">
+                        <h3 class="text-xl lg:text-2xl font-bold mb-6">Parte del programa</h3>
+                        <div class="program-card flex flex-col sm:flex-row items-start sm:items-center gap-6 cursor-pointer group" onclick="window.goToDetail('${ep.series.url_serie}')">
+                            <img src="${ep.series.portada_serie}" class="w-24 h-24 rounded-2xl object-cover shadow-lg group-hover:scale-105 transition-transform" alt="${ep.series.titulo_serie}">
+                            <div>
+                                <h3 class="text-xl lg:text-2xl font-bold group-hover:text-blue-400 transition-colors">${ep.series.titulo_serie}</h3>
+                                <p class="text-gray-400 mt-1 line-clamp-2">${ep.series.descripcion_serie}</p>
+                                <p class="text-blue-400 font-semibold mt-3 flex items-center gap-1">
+                                    Ver más episodios <span class="text-lg">→</span>
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
                 ` : ''}
+                <!-- CARRUSEL RECOMENDADOS -->
+                ${createRecommendedCarousel(ep)}
             </div>
         `;
         container.innerHTML = html;
@@ -414,7 +459,7 @@ export function renderEpisodio(container, episodioId) {
         console.error('Error en renderEpisodio:', error);
         container.innerHTML = `<div class="error-container p-8 text-center">
             <p class="text-red-500 text-lg">Error al cargar el episodio. Intenta de nuevo.</p>
-            <button onclick="window.location.href='/'" class="mt-4 bg-purple-600 px-4 py-2 rounded">Volver al inicio</button>
+            <button onclick="window.location.href='/'" class="mt-4 btn-primary px-4 py-2 rounded">Volver al inicio</button>
         </div>`;
     }
 }
@@ -431,15 +476,18 @@ export function renderSerie(container, serieUrl) {
         const episodiosHtml = episodiosSerie.map(ep => {
             const inPlaylist = userStorage.playlist.has(ep.id);
             const addIcon = inPlaylist ? ICONS.added : ICONS.add;
+            const isPremium = ep.premium === 'true';
+
             return `
-                <div class="episode-card flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 p-4 sm:p-6 bg-white/5 backdrop-blur rounded-2xl sm:rounded-3xl border border-white/10 mb-4 hover:bg-white/10 transition-all group" data-episodio-id="${ep.id}">
+                <div class="episode-card flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 p-4 sm:p-6 bg-white/5 backdrop-blur rounded-2xl sm:rounded-3xl border border-white/10 mb-4 hover:bg-white/10 transition-all group relative" data-episodio-id="${ep.id}">
                     <img src="${ep.coverUrl}" class="w-full sm:w-24 h-48 sm:h-24 rounded-xl sm:rounded-2xl object-cover" loading="lazy" onclick="window.goToDetail('${ep.detailUrl}')" style="cursor: pointer;">
+                    ${isPremium ? `<div class="absolute inset-0 flex items-center justify-center bg-black/60 text-white font-bold text-lg z-10">Premium</div>` : ''}
                     <div class="flex-1 min-w-0 w-full">
                         <div onclick="window.goToDetail('${ep.detailUrl}')" class="cursor-pointer">
                             <h3 class="text-lg sm:text-xl font-bold truncate hover:text-blue-400 transition-colors">${ep.title}</h3>
                             <div class="flex items-center gap-2 mt-1">
                                 <span class="text-gray-400 text-sm">${ep.author}</span>
-                                <span class="bg-[#7b2eda]/30 px-2 py-0.5 rounded-full text-[10px] font-bold border border-[#7b2eda]/30">${ep.type === 'video' ? 'VIDEO' : 'PODCAST'}</span>
+                                <span class="bg-blue-900/30 px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-900/30"> ${ep.initialMode === 'video' ? 'VIDEO' : 'AUDIO'} </span>
                             </div>
                         </div>
                         <p class="text-gray-400 text-sm mt-2 line-clamp-2 hidden sm:block">${ep.description}</p>
@@ -447,15 +495,19 @@ export function renderSerie(container, serieUrl) {
                             <button class="episode-action-btn w-10 h-10 rounded-xl bg-black/30 backdrop-blur border border-white/10 flex items-center justify-center hover:bg-white/20 transition" data-episodio-id="${ep.id}" data-action="add" title="Añadir a lista">
                                 <img src="${addIcon}" class="w-5 h-5 icon-white" data-episodio-id="${ep.id}" data-added="${inPlaylist}">
                             </button>
-                            <button class="episode-action-btn w-10 h-10 rounded-xl bg-black/30 backdrop-blur border border-white/10 flex items-center justify-center hover:bg-white/20 transition" data-episodio-id="${ep.id}" data-action="dl" title="${ep.allowDownload ? 'Descargar' : 'Descarga no disponible'}">
-                                <img src="${ep.allowDownload ? ICONS.dl : ICONS.noDl}" class="w-5 h-5 icon-white">
-                            </button>
-                            <button class="episode-action-btn w-10 h-10 rounded-xl bg-black/30 backdrop-blur border border-white/10 flex items-center justify-center hover:bg-white/20 transition" onclick="window.shareContent('${ep.title}', '${ep.detailUrl}')" title="Compartir">
+                            ${!isPremium && ep.allowDownload ? `
+                                <button class="episode-action-btn w-10 h-10 rounded-xl bg-black/30 backdrop-blur border border-white/10 flex items-center justify-center hover:bg-white/20 transition" data-episodio-id="${ep.id}" data-action="dl" title="Descargar">
+                                    <img src="${ICONS.dl}" class="w-5 h-5 icon-white">
+                                </button>
+                            ` : ''}
+                            <button class="episode-action-btn w-10 h-10 rounded-xl bg-black/30 backdrop-blur border border-white/10 flex items-center justify-center hover:bg-white/20 transition" onclick="window.shareContent('${ep.title}', '${ep.detailUrl}', '${ep.coverUrl}', '${ep.description}')" title="Compartir">
                                 <img src="${ICONS.share}" class="w-5 h-5 icon-white">
                             </button>
-                            <button class="episode-play-btn w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-[#7b2eda] flex items-center justify-center hover:scale-110 transition ml-auto" data-episodio-id="${ep.id}" data-action="play" title="Reproducir">
-                                <img src="${ICONS.play}" class="w-5 h-5 sm:w-7 sm:h-7 icon-white ml-1">
-                            </button>
+                            ${!isPremium ? `
+                                <button class="episode-play-btn w-10 h-10 sm:w-14 sm:h-14 rounded-full btn-primary flex items-center justify-center hover:scale-110 transition ml-auto" data-episodio-id="${ep.id}" data-action="play" title="Reproducir">
+                                    <img src="${ICONS.play}" class="w-5 h-5 sm:w-7 sm:h-7 icon-white ml-1">
+                                </button>
+                            ` : ''}
                         </div>
                     </div>
                 </div>
@@ -463,7 +515,7 @@ export function renderSerie(container, serieUrl) {
         }).join('');
         const ultimoEpisodio = episodiosSerie[0] || null;
         const html = `
-            <div class="detail-view w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="detail-view w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6" style="background: linear-gradient(135deg, ${serie.bgColor || '#0a0a0a'}20 0%, #0a0a0a 100%); min-height: 100vh;">
                 <div class="serie-header mb-8">
                     <div class="block lg:hidden">
                         <div class="relative w-full aspect-square max-w-[300px] mx-auto mb-6 rounded-3xl overflow-hidden shadow-2xl">
@@ -473,13 +525,13 @@ export function renderSerie(container, serieUrl) {
                         <p class="text-lg text-gray-300 mb-3">${episodiosSerie[0]?.author || ''}</p>
                         <p class="text-gray-400 mb-6 leading-relaxed">${serie.descripcion_serie}</p>
                         <div class="flex items-center gap-3 mb-8">
-                            ${ultimoEpisodio ? `
-                            <button class="flex-1 bg-[#7b2eda] hover:bg-[#8f3ef0] rounded-2xl py-4 px-6 flex items-center justify-center gap-3 transition transform hover:scale-[1.02]" data-episodio-id="${ultimoEpisodio.id}" data-action="play">
-                                <img src="${ICONS.play}" class="w-6 h-6 icon-white">
-                                <span class="font-bold">Último episodio</span>
-                            </button>
+                            ${ultimoEpisodio && ultimoEpisodio.premium !== 'true' ? `
+                                <button class="flex-1 btn-primary rounded-2xl py-4 px-6 flex items-center justify-center gap-3 transition transform hover:scale-[1.02]" data-episodio-id="${ultimoEpisodio.id}" data-action="play">
+                                    <img src="${ICONS.play}" class="w-6 h-6 icon-white">
+                                    <span class="font-bold">Último episodio</span>
+                                </button>
                             ` : ''}
-                            <button class="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" onclick="window.shareContent('${serie.titulo_serie}', '${serie.url_serie}')" title="Compartir serie">
+                            <button class="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" onclick="window.shareContent('${serie.titulo_serie}', '${serie.url_serie}', '${serie.portada_serie}', '${serie.descripcion_serie}')" title="Compartir serie">
                                 <img src="${ICONS.share}" class="w-6 h-6 icon-white">
                             </button>
                         </div>
@@ -495,13 +547,13 @@ export function renderSerie(container, serieUrl) {
                                 <p class="text-xl text-gray-300 mb-4">${episodiosSerie[0]?.author || ''}</p>
                                 <p class="text-gray-400 max-w-3xl leading-relaxed">${serie.descripcion_serie}</p>
                                 <div class="flex items-center gap-4 mt-8">
-                                    ${ultimoEpisodio ? `
-                                    <button class="bg-[#7b2eda] hover:bg-[#8f3ef0] rounded-2xl py-4 px-8 flex items-center gap-3 transition transform hover:scale-105" data-episodio-id="${ultimoEpisodio.id}" data-action="play">
-                                        <img src="${ICONS.play}" class="w-6 h-6 icon-white">
-                                        <span class="font-bold text-lg">Último episodio</span>
-                                    </button>
+                                    ${ultimoEpisodio && ultimoEpisodio.premium !== 'true' ? `
+                                        <button class="btn-primary rounded-2xl py-4 px-8 flex items-center gap-3 transition transform hover:scale-105" data-episodio-id="${ultimoEpisodio.id}" data-action="play">
+                                            <img src="${ICONS.play}" class="w-6 h-6 icon-white">
+                                            <span class="font-bold text-lg">Último episodio</span>
+                                        </button>
                                     ` : ''}
-                                    <button class="w-14 h-14 rounded-2xl bg-black/40 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" onclick="window.shareContent('${serie.titulo_serie}', '${serie.url_serie}')" title="Compartir serie">
+                                    <button class="w-14 h-14 rounded-2xl bg-black/40 backdrop-blur border border-white/20 flex items-center justify-center hover:bg-white/20 transition" onclick="window.shareContent('${serie.titulo_serie}', '${serie.url_serie}', '${serie.portada_serie}', '${serie.descripcion_serie}')" title="Compartir serie">
                                         <img src="${ICONS.share}" class="w-6 h-6 icon-white">
                                     </button>
                                 </div>
@@ -518,6 +570,8 @@ export function renderSerie(container, serieUrl) {
                         ${episodiosHtml}
                     </div>
                 </div>
+                <!-- CARRUSEL RECOMENDADOS AL FINAL DE LA SERIE -->
+                ${createRecommendedCarousel(episodiosSerie[0])}
             </div>
         `;
         container.innerHTML = html;
@@ -525,12 +579,12 @@ export function renderSerie(container, serieUrl) {
         console.error('Error en renderSerie:', error);
         container.innerHTML = `<div class="error-container p-8 text-center">
             <p class="text-red-500 text-lg">Error al cargar la serie. Intenta de nuevo.</p>
-            <button onclick="window.location.href='/'" class="mt-4 bg-purple-600 px-4 py-2 rounded">Volver al inicio</button>
+            <button onclick="window.location.href='/'" class="mt-4 btn-primary px-4 py-2 rounded">Volver al inicio</button>
         </div>`;
     }
 }
 
-// ---------- RENDER FEED ----------
+// ---------- RENDER FEED (sin cambios mayores, solo colores) ----------
 export function renderFeed(container) {
     let feedView = document.getElementById('feed-view');
     let gridView = document.getElementById('grid-view');
@@ -553,69 +607,69 @@ export function renderFeed(container) {
             </div>
         `;
         feedView = document.getElementById('feed-view');
-        gridView = document.getElementById('grid-view');
-    }
-    
-    const getRandomSafe = (count, filterFn = () => true) => {
-        const filtered = DATA.filter(filterFn);
-        if (filtered.length === 0) return [];
-        const shuffled = [...filtered].sort(() => 0.5 - Math.random());
-        return shuffled.slice(0, Math.min(count, filtered.length));
-    };
-    
-    feedView.innerHTML = '';
-    
-    feedView.innerHTML += createCarousel("Destacados del Día", "vertical",
-        getRandomSafe(15), "Todos", 'items');
-    
-    feedView.innerHTML += createCarousel("Nuevos Lanzamientos", "standard",
-        getRandomSafe(15, ep => new Date(ep.date) > new Date(Date.now() - 30*24*60*60*1000)), "Todos", 'items');
-    
-    feedView.innerHTML += createCarousel("Series de Video", "expand",
-        getRandomSafe(10, e => e.type === 'video'), "Cine y TV", 'category');
-    
-    feedView.innerHTML += createCarousel("Top Semanal", "list",
-        getRandomSafe(16), "Todos", 'items');
-    
-    feedView.innerHTML += createCarousel("Para Estudiar Profundamente", "double",
-        getRandomSafe(20, e => e.categories.includes("Matemáticas") || e.categories.includes("Física y Astronomía")), "Matemáticas", 'category');
-    
-    feedView.innerHTML += createCarousel("Matemáticas", "standard",
-        getRandomSafe(15, e => e.categories.includes("Matemáticas")), "Matemáticas", 'category');
-    
-    feedView.innerHTML += createCarousel("Especiales en Video", "expand",
-        getRandomSafe(10, e => e.type === 'video' && e.categories.includes("Documentales")), "Documentales", 'category');
-    
-    feedView.innerHTML += createCarousel("Física y Astronomía", "standard",
-        getRandomSafe(15, e => e.categories.includes("Física y Astronomía")), "Física y Astronomía", 'category');
-    
-    feedView.innerHTML += createCarousel("Ciencias Naturales y Tecnología", "double",
-        getRandomSafe(20, e => e.categories.some(c => ["Ciencias Naturales", "Tecnología e Informática"].includes(c))), "Otras Ciencias", 'category');
-    
-    feedView.innerHTML += createSeriesCarousel();
-    
-    feedView.innerHTML += createCarousel("Otras Ciencias y Disciplinas", "standard",
-        getRandomSafe(15, e => e.categories.includes("Otras Ciencias") ||
-            e.categories.some(c => ["Ciencias Naturales", "Tecnología e Informática"].includes(c))),
-        "Otras Ciencias", 'category');
-    
-    feedView.innerHTML += createCarousel("Imprescindibles del Mes", "list",
-        getRandomSafe(16, e => new Date(e.date) > new Date(Date.now() - 60*24*60*60*1000)), "Todos", 'items');
-    
-    feedView.innerHTML += createCarousel("Podcasts Destacados", "standard",
-        getRandomSafe(15, e => e.type === 'audio'), "Todos", 'items');
-    
-    feedView.innerHTML += createCarousel("Charlas y Conferencias", "expand",
-        getRandomSafe(10, e => e.type === 'video' && (e.categories.includes("Cine y TV") || e.categories.includes("Documentales"))), "Cine y TV", 'category');
-    
-    feedView.innerHTML += createCarousel("Mentes Curiosas", "standard",
-        getRandomSafe(15, e => 
-            /\b(investigación|investigacion|criminalística|criminalistica|crimen|delito|forense|guerra|conflicto|violencia|seguridad|policía|policia|detective|asesinato|homicidio|justicia|penal|legal|sociedad|problema social)\b/i
-            .test(e.title + ' ' + e.description + ' ' + (e.series?.titulo_serie || ''))
-        ), "Derecho", 'category');
-    
-    feedView.innerHTML += createCarousel("Mix de Saberes", "double",
-        getRandomSafe(20), "Todos", 'items');
+gridView = document.getElementById('grid-view');
+}
+
+const getRandomSafe = (count, filterFn = () => true) => {
+    const filtered = DATA.filter(filterFn);
+    if (filtered.length === 0) return [];
+    const shuffled = [...filtered].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, Math.min(count, filtered.length));
+};
+
+feedView.innerHTML = '';
+
+feedView.innerHTML += createCarousel("Destacados del Día", "vertical",
+    getRandomSafe(15), "Todos", 'items');
+
+feedView.innerHTML += createCarousel("Nuevos Lanzamientos", "standard",
+    getRandomSafe(15, ep => new Date(ep.date) > new Date(Date.now() - 30*24*60*60*1000)), "Todos", 'items');
+
+feedView.innerHTML += createCarousel("Series de Video", "expand",
+    getRandomSafe(10, e => e.initialMode === 'video'), "Cine y TV", 'category');
+
+feedView.innerHTML += createCarousel("Top Semanal", "list",
+    getRandomSafe(16), "Todos", 'items');
+
+feedView.innerHTML += createCarousel("Para Estudiar Profundamente", "double",
+    getRandomSafe(20, e => e.categories.includes("Matemáticas") || e.categories.includes("Física y Astronomía")), "Matemáticas", 'category');
+
+feedView.innerHTML += createCarousel("Matemáticas", "standard",
+    getRandomSafe(15, e => e.categories.includes("Matemáticas")), "Matemáticas", 'category');
+
+feedView.innerHTML += createCarousel("Especiales en Video", "expand",
+    getRandomSafe(10, e => e.initialMode === 'video' && e.categories.includes("Documentales")), "Documentales", 'category');
+
+feedView.innerHTML += createCarousel("Física y Astronomía", "standard",
+    getRandomSafe(15, e => e.categories.includes("Física y Astronomía")), "Física y Astronomía", 'category');
+
+feedView.innerHTML += createCarousel("Ciencias Naturales y Tecnología", "double",
+    getRandomSafe(20, e => e.categories.some(c => ["Ciencias Naturales", "Tecnología e Informática"].includes(c))), "Otras Ciencias", 'category');
+
+feedView.innerHTML += createSeriesCarousel();
+
+feedView.innerHTML += createCarousel("Otras Ciencias y Disciplinas", "standard",
+    getRandomSafe(15, e => e.categories.includes("Otras Ciencias") ||
+        e.categories.some(c => ["Ciencias Naturales", "Tecnología e Informática"].includes(c))),
+    "Otras Ciencias", 'category');
+
+feedView.innerHTML += createCarousel("Imprescindibles del Mes", "list",
+    getRandomSafe(16, e => new Date(e.date) > new Date(Date.now() - 60*24*60*60*1000)), "Todos", 'items');
+
+feedView.innerHTML += createCarousel("Podcasts Destacados", "standard",
+    getRandomSafe(15, e => e.initialMode === 'audio'), "Todos", 'items');
+
+feedView.innerHTML += createCarousel("Charlas y Conferencias", "expand",
+    getRandomSafe(10, e => e.initialMode === 'video' && (e.categories.includes("Cine y TV") || e.categories.includes("Documentales"))), "Cine y TV", 'category');
+
+feedView.innerHTML += createCarousel("Mentes Curiosas", "standard",
+    getRandomSafe(15, e =>
+        /\b(investigación|investigacion|criminalística|criminalistica|crimen|delito|forense|guerra|conflicto|violencia|seguridad|policía|policia|detective|asesinato|homicidio|justicia|penal|legal|sociedad|problema social)\b/i
+        .test(e.title + ' ' + e.description + ' ' + (e.series?.titulo_serie || ''))
+    ), "Derecho", 'category');
+
+feedView.innerHTML += createCarousel("Mix de Saberes", "double",
+    getRandomSafe(20), "Todos", 'items');
 }
 
 // ---------- RENDER GRID ----------
@@ -641,11 +695,13 @@ export function renderGrid(container, items, title) {
         `;
         gridView = document.getElementById('grid-view');
     }
+
     const gridContainer = document.getElementById('results-grid');
     const emptyState = document.getElementById('empty-state');
     const titleEl = document.getElementById('grid-title');
     titleEl.innerText = title;
     gridContainer.innerHTML = '';
+
     if (items.length === 0) {
         emptyState.classList.remove('hidden');
         gridContainer.classList.add('hidden');
@@ -664,8 +720,10 @@ export function renderGrid(container, items, title) {
             gridContainer.innerHTML += createGridCard(item);
         });
     }
+
     document.getElementById('feed-view')?.classList.add('hidden');
     gridView.classList.remove('hidden');
+
     document.getElementById('closeGridBtn')?.addEventListener('click', () => {
         window.history.pushState(null, null, '/');
         window.dispatchEvent(new PopStateEvent('popstate'));
@@ -680,9 +738,9 @@ export function renderSeriesGrid(container, title) {
             seriesSet.set(ep.series.url_serie, ep.series);
         }
     });
-    
+
     const series = Array.from(seriesSet.values());
-    
+
     let gridView = document.getElementById('grid-view');
     if (!gridView) {
         container.innerHTML = `
@@ -702,13 +760,13 @@ export function renderSeriesGrid(container, title) {
         `;
         gridView = document.getElementById('grid-view');
     }
-    
+
     const gridContainer = document.getElementById('results-grid');
     const emptyState = document.getElementById('empty-state');
     const titleEl = document.getElementById('grid-title');
     titleEl.innerText = title;
     gridContainer.innerHTML = '';
-    
+
     if (series.length === 0) {
         emptyState.classList.remove('hidden');
         gridContainer.classList.add('hidden');
@@ -727,9 +785,10 @@ export function renderSeriesGrid(container, title) {
             `;
         });
     }
-    
+
     document.getElementById('feed-view')?.classList.add('hidden');
     gridView.classList.remove('hidden');
+
     document.getElementById('closeGridBtn')?.addEventListener('click', () => {
         window.history.pushState(null, null, '/');
         window.dispatchEvent(new PopStateEvent('popstate'));
@@ -737,13 +796,35 @@ export function renderSeriesGrid(container, title) {
 }
 
 // ---------- FUNCIONES GLOBALES ----------
-window.shareContent = async (title, url) => {
+window.shareContent = async (title, url, cover = '', description = '') => {
     const fullUrl = window.location.origin + url;
+    const shareData = {
+        title,
+        text: description.substring(0, 150) + (description.length > 150 ? '...' : ''),
+        url: fullUrl
+    };
+
+    // Meta tags para redes sociales
+    const updateMeta = (property, content) => {
+        let meta = document.querySelector(`meta[property="${property}"]`);
+        if (!meta) {
+            meta = document.createElement('meta');
+            meta.setAttribute('property', property);
+            document.head.appendChild(meta);
+        }
+        meta.setAttribute('content', content);
+    };
+
+    updateMeta('og:title', title);
+    updateMeta('og:description', description);
+    updateMeta('og:image', cover || 'https://balta-media.odoo.com/default-og-image.jpg');
+    updateMeta('og:url', fullUrl);
+
     if (navigator.share) {
         try {
-            await navigator.share({ title, url: fullUrl });
+            await navigator.share(shareData);
         } catch (e) {
-            console.log('Compartir cancelado');
+            navigator.clipboard.writeText(fullUrl);
         }
     } else {
         navigator.clipboard.writeText(fullUrl);
@@ -751,77 +832,53 @@ window.shareContent = async (title, url) => {
 };
 
 window.handlePlay = function(e, episodioId) {
-    e.stopPropagation();
     e.stopImmediatePropagation();
     e.preventDefault();
-    
     const ep = DATA.find(x => x.id === episodioId);
-    if (!ep) return false;
+    if (!ep) return;
 
-    if (typeof window.playEpisodeExpanded !== 'function') {
-        showCustomAlert(ep.title, 'no está disponible por ahora.');
-        return false;
-    }
-
-    try {
-        window.playEpisodeExpanded(
-            ep.mediaUrl,
-            ep.type,
-            ep.coverUrl,
-            ep.coverUrl,
-            ep.title,
-            ep.detailUrl,
-            ep.author,
-            [],
-            ep.description,
-            ep.allowDownload
-        );
-    } catch (err) {
-        console.error('Error al reproducir:', err);
-        // No mostramos alerta para no interrumpir
-    }
-
-    return false;
+    window.playEpisodeExpanded(
+        ep.mediaUrl || '',
+        ep.mediaVideo || '',
+        ep.initialMode || 'audio',
+        ep.coverUrl || '',
+        ep.coverInfo || ep.coverUrl || '',
+        ep.title || '',
+        ep.detailUrl || '',
+        ep.author || '',
+        getAllEpisodios(),
+        ep.text || ep.description || '',
+        ep.subtitlesUrl || '',
+        ep.bgColor || '#0a0a0a',
+        ep.allowDownload ?? false
+    );
 };
 
 window.handleDl = function(e, episodioId) {
-    e.stopPropagation();
+    e.stopImmediatePropagation();
     e.preventDefault();
     const ep = DATA.find(x => x.id === episodioId);
-    if (!ep) return false;
+    if (!ep || !ep.allowDownload) return;
 
-    if (!ep.allowDownload) {
-        showCustomAlert(ep.title, 'no está disponible para descarga por ahora.');
-        return false;
-    }
+    const link = ep.mediaVideo || ep.mediaUrl;
+    if (!link) return;
 
-    const ext = ep.type === 'video' ? 'mp4' : 'mp3';
-    const filename = `${ep.title.replace(/[^a-z0-9]/gi, '_').substring(0, 50)}.${ext}`;
-    
-    try {
-        const a = document.createElement('a');
-        a.href = ep.mediaUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    } catch (error) {
-        console.error('Error en descarga:', error);
-        showCustomAlert(ep.title, 'no se pudo descargar automáticamente.');
-    }
-    
-    return false;
+    const a = document.createElement('a');
+    a.href = link;
+    a.download = `${ep.title.replace(/[^a-z0-9]/gi, '_')}.${ep.mediaVideo ? 'mp4' : 'm4a'}`;
+    a.target = '_blank'; // fallback: abre en pestaña si falla descarga
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 };
 
 window.handleAdd = function(e, episodioId) {
-    e.stopPropagation();
+    e.stopImmediatePropagation();
     e.preventDefault();
-    
     const ep = DATA.find(x => x.id === episodioId);
-    if (!ep) return false;
+    if (!ep) return;
 
     const alreadyIn = userStorage.playlist.has(ep.id);
-    
     if (alreadyIn) {
         userStorage.playlist.remove(ep.id);
     } else {
@@ -837,8 +894,6 @@ window.handleAdd = function(e, episodioId) {
                 setTimeout(() => img.style.transform = 'scale(1)', 180);
             }
         });
-
-    return false;
 };
 
 window.goToDetail = function(url) {
@@ -858,34 +913,25 @@ window.handleCategoryClick = function(category) {
 window.showItemsGrid = function(title, itemIds) {
     const items = itemIds.map(id => DATA.find(ep => ep.id === id)).filter(ep => ep);
     const container = document.getElementById('app');
-    if (container) {
-        renderGrid(container, items, title);
-    }
+    if (container) renderGrid(container, items, title);
 };
 
 window.showSeriesGrid = function(title) {
     const container = document.getElementById('app');
-    if (container) {
-        renderSeriesGrid(container, title);
-    }
+    if (container) renderSeriesGrid(container, title);
 };
 
 export function renderCategoryPills(activeCat = 'Todos') {
     const container = document.getElementById('category-pills');
     if (!container) return;
-   
+
     container.innerHTML = '';
-   
     CATEGORIES.forEach(cat => {
         const isActive = cat === activeCat;
         const btn = document.createElement('button');
         btn.className = `whitespace-nowrap px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs font-bold transition-all ${isActive ? 'bg-white text-black' : 'bg-white/10 text-gray-300 hover:bg-white/20'}`;
         btn.innerText = cat;
-       
-        btn.addEventListener('click', () => {
-            window.handleCategoryClick(cat);
-        });
-       
+        btn.addEventListener('click', () => window.handleCategoryClick(cat));
         container.appendChild(btn);
     });
 }
@@ -896,15 +942,13 @@ if (document.readyState === 'loading') {
     renderCategoryPills();
 }
 
-// ---------- LISTENER DE CAPTURA GLOBAL PARA BOTONES ----------
+// ---------- LISTENER GLOBAL ACTUALIZADO ----------
 document.addEventListener('click', function(e) {
-    // Buscar el elemento más cercano que sea un botón de acción
     const target = e.target.closest(
-        '.action-icon, .play-icon-lg, .mobile-play-button, .episode-play-btn, .episode-action-btn, [data-action="play"], [data-action="add"], [data-action="dl"]'
+        '[data-action], .play-icon-lg, .mobile-play-button, .episode-play-btn, .action-icon'
     );
     if (!target) return;
 
-    // Prevenir cualquier comportamiento por defecto y detener propagación inmediatamente
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
@@ -912,49 +956,32 @@ document.addEventListener('click', function(e) {
     const episodioId = target.closest('[data-episodio-id]')?.dataset.episodioId;
     if (!episodioId) return;
 
-    // Determinar la acción según la clase o atributo data-action
-    if (target.matches('.play-icon-lg, .mobile-play-button, .episode-play-btn') || target.closest('[data-action="play"]')) {
+    if (target.matches('[data-action="play"], .play-icon-lg, .mobile-play-button, .episode-play-btn')) {
         window.handlePlay(e, episodioId);
-    } else if (target.matches('.action-icon') || target.closest('[data-action="add"]')) {
-        // Si es el icono de añadir, pero puede ser también descarga, distinguimos por el título o atributo
-        if (target.title?.includes('Descargar') || target.closest('[data-action="dl"]')) {
-            window.handleDl(e, episodioId);
-        } else {
-            window.handleAdd(e, episodioId);
-        }
+    } else if (target.matches('[data-action="dl"]') || target.title?.includes('Descargar')) {
+        window.handleDl(e, episodioId);
+    } else if (target.matches('[data-action="add"]') || target.matches('.action-icon[data-added]')) {
+        window.handleAdd(e, episodioId);
     }
-}, true); // true = fase de captura, se ejecuta antes que cualquier otro listener
+}, true);
 
 // ---------- ALERTA PERSONALIZADA ----------
 function showCustomAlert(title, message) {
     const fullMessage = `"${title}" ${message}`;
-    
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm';
     modal.innerHTML = `
         <div class="bg-zinc-900 rounded-2xl p-6 max-w-md w-[90%] border border-zinc-700 shadow-2xl">
             <h3 class="text-xl font-bold text-white mb-4">${fullMessage}</h3>
             <div class="flex flex-col sm:flex-row gap-3 justify-end">
-                <a href="https://www.baltaanay.org/error" target="_blank" 
-                   class="px-5 py-2.5 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium text-center transition">
-                    Reportar
-                </a>
-                <a href="https://www.baltaanay.org/contactus" target="_blank" 
-                   class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium text-center transition">
-                    Solicitar
-                </a>
-                <button onclick="this.closest('.fixed').remove()" 
-                        class="px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-medium transition">
-                    Cerrar
-                </button>
+                <a href="https://www.baltaanay.org/error" target="_blank" class="px-5 py-2.5 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium text-center transition">Reportar</a>
+                <a href="https://www.baltaanay.org/contactus" target="_blank" class="px-5 py-2.5 btn-primary rounded-lg text-white font-medium text-center transition">Solicitar</a>
+                <button onclick="this.closest('.fixed').remove()" class="px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-medium transition">Cerrar</button>
             </div>
         </div>
     `;
     document.body.appendChild(modal);
-    
-    modal.addEventListener('click', e => {
-        if (e.target === modal) modal.remove();
-    });
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 }
 
-console.log('✅ show.js cargado completamente - versión con captura de eventos');
+console.log('✅ show.js cargado completamente - versión modernizada 2026');
