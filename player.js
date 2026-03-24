@@ -2,7 +2,7 @@
  * ═══════════════════════════════════════════════════════════════
  *  MEDIA PLAYER — YouTube Music + Spotify Style
  *  Enhanced version with persistent bottom bar & side panels
- *  v2.0
+ *  v3.0 - Full features
  * ═══════════════════════════════════════════════════════════════
  */
 (function () {
@@ -12,7 +12,7 @@
   const S = {
     playing: false,
     expanded: false,
-    mode: "audio",          // "audio" | "video"
+    mode: "audio",
     mediaUrl: "",
     mediaVideo: "",
     coverUrl: "",
@@ -31,7 +31,8 @@
     speed: 1,
     sleepTimer: null,
     sleepMinutes: 0,
-    panelOpen: null,        // "queue" | "speed" | "share" | "timer" | null
+    sleepEndTime: null,
+    panelOpen: null,
     duration: 0,
     currentTime: 0,
     buffered: 0,
@@ -42,8 +43,9 @@
     shuffle: false,
     liked: false,
     videoFullscreen: false,
-    videoControlsVisible: false,
+    videoControlsVisible: true,
     videoControlsTimeout: null,
+    pendingPanel: null,
   };
 
   /* ── Helpers ───────────────────────────────────────────── */
@@ -70,6 +72,10 @@
   const darken = (hex, f) => {
     const [r,g,b] = hexToRgb(hex);
     return `rgb(${Math.round(r*f)},${Math.round(g*f)},${Math.round(b*f)})`;
+  };
+  const lighten = (hex, f) => {
+    const [r,g,b] = hexToRgb(hex);
+    return `rgb(${Math.min(255, Math.round(r*f))},${Math.min(255, Math.round(g*f))},${Math.min(255, Math.round(b*f))})`;
   };
   const luminance = (hex) => {
     const [r,g,b] = hexToRgb(hex);
@@ -103,6 +109,7 @@
     like: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`,
     liked: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="red"/></svg>`,
     fullscreen: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>`,
+    exitFullscreen: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>`,
   };
   const icon = (name, size) => `<span class="mp-ico" style="width:${size||20}px;height:${size||20}px">${ICO[name]||""}</span>`;
 
@@ -127,59 +134,72 @@
   
   .mp-mini-content{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;height:80px;gap:20px}
   
-  /* Left section */
-  .mp-mini-left{display:flex;align-items:center;gap:16px;min-width:280px}
+  /* Left section - fixed width */
+  .mp-mini-left{display:flex;align-items:center;gap:16px;flex:0 0 280px;min-width:0}
   .mp-mini-cover{width:56px;height:56px;border-radius:8px;object-fit:cover;cursor:pointer;flex-shrink:0;box-shadow:0 4px 12px rgba(0,0,0,.3)}
   .mp-mini-info{flex:1;min-width:0;cursor:pointer}
   .mp-mini-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .mp-mini-author{font-size:12px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .mp-mini-add{background:none;border:none;color:#fff;cursor:pointer;padding:8px;border-radius:50%;opacity:.7;transition:all .2s}
+  .mp-mini-add{background:none;border:none;color:#fff;cursor:pointer;padding:8px;border-radius:50%;opacity:.7;transition:all .2s;flex-shrink:0}
   .mp-mini-add:hover{opacity:1;transform:scale(1.1)}
   
-  /* Center controls */
-  .mp-mini-center{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;max-width:500px}
-  .mp-mini-controls{display:flex;align-items:center;gap:12px}
-  .mp-mini-btn{background:none;border:none;color:inherit;cursor:pointer;padding:8px;border-radius:50%;transition:all .15s;display:inline-flex;align-items:center;justify-content:center}
+  /* Center controls - fixed width and centered */
+  .mp-mini-center{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;justify-content:center}
+  .mp-mini-controls{display:flex;align-items:center;gap:12px;justify-content:center}
+  .mp-mini-btn{background:none;border:none;color:inherit;cursor:pointer;padding:8px;border-radius:50%;transition:all .15s;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
   .mp-mini-btn:hover{background:rgba(255,255,255,.1);transform:scale(1.05)}
   .mp-mini-btn:active{transform:scale(.95)}
   .mp-mini-play{width:44px;height:44px;background:#fff!important;color:#000!important;border-radius:50%;padding:0}
   .mp-mini-play:hover{transform:scale(1.08)}
   .mp-mini-time{display:flex;align-items:center;gap:12px;font-size:11px;color:rgba(255,255,255,.6)}
   .mp-mini-time span{min-width:40px;font-variant-numeric:tabular-nums}
-  .mp-mini-time .mp-sep{flex:1;height:2px;background:rgba(255,255,255,.1);border-radius:2px}
+  .mp-mini-time .mp-sep{flex:1;height:2px;background:rgba(255,255,255,.1);border-radius:2px;min-width:100px}
   
-  /* Right section */
-  .mp-mini-right{display:flex;align-items:center;gap:16px;min-width:280px;justify-content:flex-end}
+  /* Right section - fixed width */
+  .mp-mini-right{display:flex;align-items:center;gap:16px;flex:0 0 280px;justify-content:flex-end}
   .mp-mini-vol-wrap{display:flex;align-items:center;gap:8px}
   .mp-mini-vol-bar{width:80px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;cursor:pointer;position:relative}
   .mp-mini-vol-fill{height:100%;background:#fff;border-radius:2px;pointer-events:none}
-  .mp-speed-badge{padding:4px 12px;background:rgba(255,255,255,.1);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s}
+  .mp-speed-badge{padding:4px 12px;background:rgba(255,255,255,.1);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
   .mp-speed-badge:hover{background:rgba(255,255,255,.2)}
-  .mp-like-btn{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;padding:8px;border-radius:50%;transition:all .2s}
+  .mp-like-btn{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;padding:8px;border-radius:50%;transition:all .2s;display:inline-flex;align-items:center;flex-shrink:0}
   .mp-like-btn:hover{transform:scale(1.1)}
   .mp-like-btn.active{color:#ff4444}
 
-  /* ── Expanded view (simplified - only media) ───── */
-  .mp-expanded{position:fixed;bottom:80px;left:0;right:0;top:0;background:#111;color:#fff;display:flex;transform:translateY(100%);transition:transform .38s cubic-bezier(.16,1,.3,1);overflow:hidden;z-index:999998}
+  /* ── Expanded view with dynamic background ───── */
+  .mp-expanded{position:fixed;bottom:80px;left:0;right:0;top:0;display:flex;transform:translateY(100%);transition:transform .38s cubic-bezier(.16,1,.3,1);overflow:hidden;z-index:999998}
   .mp-expanded.open{transform:translateY(0)}
+  .mp-expanded-bg{position:absolute;top:0;left:0;right:0;bottom:0;transition:background .5s ease;z-index:0}
   
-  .mp-exp-container{display:flex;width:100%;height:100%;transition:all .3s ease}
-  .mp-exp-media{flex:1;display:flex;align-items:center;justify-content:center;position:relative;transition:flex .3s ease;background:#000}
+  .mp-exp-container{display:flex;width:100%;height:100%;transition:all .3s ease;position:relative;z-index:1}
+  .mp-exp-media{flex:1;display:flex;align-items:center;justify-content:center;position:relative;transition:flex .3s ease;background:transparent}
   .mp-exp-media.with-panel{flex:0 0 60%}
-  .mp-exp-cover{max-width:80%;max-height:80%;object-fit:contain;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+  .mp-exp-cover{max-width:80%;max-height:80%;object-fit:contain;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);transition:all .3s}
   .mp-exp-video{width:100%;height:100%;object-fit:contain;background:#000}
-  .mp-video-controls{position:absolute;bottom:30px;right:30px;opacity:0;transition:opacity .3s;z-index:10}
-  .mp-exp-media:hover .mp-video-controls{opacity:1}
-  .mp-fullscreen-btn{background:rgba(0,0,0,.7);border:none;color:#fff;padding:12px;border-radius:50%;cursor:pointer;backdrop-filter:blur(8px);transition:all .2s}
-  .mp-fullscreen-btn:hover{background:rgba(0,0,0,.9);transform:scale(1.1)}
-  .mp-exp-subs{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);text-align:center;font-size:clamp(18px,4vw,32px);font-weight:700;line-height:1.4;max-width:80%;text-shadow:0 2px 12px rgba(0,0,0,.7);pointer-events:none}
+  
+  /* Video controls overlay for fullscreen */
+  .mp-video-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);z-index:1000001;display:none;flex-direction:column;justify-content:space-between;align-items:center;backdrop-filter:blur(10px)}
+  .mp-video-overlay.active{display:flex}
+  .mp-video-overlay-top{position:absolute;top:0;left:0;right:0;padding:20px;background:linear-gradient(180deg, rgba(0,0,0,.7) 0%, transparent 100%)}
+  .mp-video-overlay-title{font-size:18px;font-weight:600;text-align:center;color:#fff}
+  .mp-video-overlay-center{display:flex;align-items:center;justify-content:center;gap:40px;flex:1}
+  .mp-video-overlay-btn{background:rgba(255,255,255,.2);border:none;color:#fff;width:60px;height:60px;border-radius:50%;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
+  .mp-video-overlay-btn:hover{background:rgba(255,255,255,.4);transform:scale(1.1)}
+  .mp-video-overlay-play{width:80px;height:80px;background:rgba(255,255,255,.3)}
+  .mp-video-overlay-bottom{position:absolute;bottom:0;left:0;right:0;padding:20px;background:linear-gradient(0deg, rgba(0,0,0,.7) 0%, transparent 100%)}
+  .mp-video-overlay-progress{height:4px;background:rgba(255,255,255,.3);border-radius:2px;cursor:pointer;margin-bottom:12px}
+  .mp-video-overlay-progress-fill{height:100%;background:#fff;border-radius:2px;width:0%}
+  .mp-video-overlay-time{display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px}
+  .mp-video-overlay-exit{position:absolute;top:20px;right:20px;background:rgba(0,0,0,.5);border:none;color:#fff;padding:10px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  
+  .mp-exp-subs{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);text-align:center;font-size:clamp(18px,4vw,32px);font-weight:700;line-height:1.4;max-width:80%;text-shadow:0 2px 12px rgba(0,0,0,.7);pointer-events:none;z-index:2}
   
   /* Side panel */
   .mp-exp-panel{position:fixed;right:0;top:0;bottom:0;width:40%;background:rgba(20,20,20,.98);backdrop-filter:blur(20px);transform:translateX(100%);transition:transform .3s ease;z-index:20;display:flex;flex-direction:column;border-left:1px solid rgba(255,255,255,.1)}
   .mp-exp-panel.open{transform:translateX(0)}
   .mp-panel-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,.1)}
   .mp-panel-header h3{font-size:18px;font-weight:700}
-  .mp-panel-close{background:none;border:none;color:#fff;cursor:pointer;padding:8px;border-radius:50%;transition:background .15s}
+  .mp-panel-close{background:none;border:none;color:#fff;cursor:pointer;padding:8px;border-radius:50%;transition:background .15s;display:inline-flex;align-items:center}
   .mp-panel-close:hover{background:rgba(255,255,255,.1)}
   .mp-panel-body{flex:1;overflow-y:auto;padding:16px 24px}
   
@@ -212,34 +232,31 @@
   
   /* Responsive */
   @media(max-width:768px){
-    .mp-mini-left{min-width:200px}
-    .mp-mini-right{min-width:200px}
+    .mp-mini-left{flex:0 0 200px}
+    .mp-mini-right{flex:0 0 200px}
     .mp-mini-vol-bar{width:60px}
     .mp-exp-panel{width:100%}
     .mp-exp-media.with-panel{flex:0 0 100%}
+    .mp-mini-time .mp-sep{min-width:50px}
   }
   `;
 
   function buildUI() {
-    // Style
     const style = document.createElement("style");
     style.textContent = CSS;
     document.head.appendChild(style);
 
-    // Root
     const root = ce("div");
     root.id = "mp-root";
     root.innerHTML = `
-    <!-- EXPANDED VIEW (simplified) -->
+    <!-- EXPANDED VIEW -->
     <div class="mp-expanded" id="mp-exp">
+      <div class="mp-expanded-bg" id="mp-exp-bg"></div>
       <div class="mp-exp-container" id="mp-exp-container">
         <div class="mp-exp-media" id="mp-exp-media">
           <img class="mp-exp-cover" id="mp-exp-cover" src="" alt="cover" />
           <video class="mp-exp-video" id="mp-exp-video" style="display:none" playsinline></video>
           <div class="mp-exp-subs" id="mp-exp-subs" style="display:none"></div>
-          <div class="mp-video-controls" id="mp-video-controls">
-            <button class="mp-fullscreen-btn" id="mp-fullscreen-btn">${icon("fullscreen",24)}</button>
-          </div>
         </div>
       </div>
       
@@ -253,14 +270,35 @@
       </div>
     </div>
 
-    <!-- MINI BAR (persistent bottom player) -->
+    <!-- Video Overlay for Fullscreen -->
+    <div class="mp-video-overlay" id="mp-video-overlay">
+      <div class="mp-video-overlay-top">
+        <div class="mp-video-overlay-title" id="mp-overlay-title"></div>
+      </div>
+      <button class="mp-video-overlay-exit" id="mp-overlay-exit">${icon("exitFullscreen",24)}</button>
+      <div class="mp-video-overlay-center">
+        <button class="mp-video-overlay-btn" id="mp-overlay-prev">${icon("prev",32)}</button>
+        <button class="mp-video-overlay-btn mp-video-overlay-play" id="mp-overlay-play">${icon("play",40)}</button>
+        <button class="mp-video-overlay-btn" id="mp-overlay-next">${icon("next",32)}</button>
+      </div>
+      <div class="mp-video-overlay-bottom">
+        <div class="mp-video-overlay-progress" id="mp-overlay-progress">
+          <div class="mp-video-overlay-progress-fill" id="mp-overlay-progress-fill"></div>
+        </div>
+        <div class="mp-video-overlay-time">
+          <span id="mp-overlay-current">0:00</span>
+          <span id="mp-overlay-duration">0:00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MINI BAR -->
     <div class="mp-mini" id="mp-mini">
       <div class="mp-mini-progress" id="mp-mini-prog">
         <div class="mp-mini-progress-buf" id="mp-mini-buf"></div>
         <div class="mp-mini-progress-fill" id="mp-mini-fill"></div>
       </div>
       <div class="mp-mini-content">
-        <!-- Left section -->
         <div class="mp-mini-left">
           <img class="mp-mini-cover" id="mp-mini-cover" src="" alt="" />
           <div class="mp-mini-info" id="mp-mini-info">
@@ -270,7 +308,6 @@
           <button class="mp-mini-add" id="mp-add-btn" title="Añadir a lista">${icon("queue",20)}</button>
         </div>
         
-        <!-- Center controls -->
         <div class="mp-mini-center">
           <div class="mp-mini-controls">
             <button class="mp-mini-btn" id="mp-shuffle-btn" title="Aleatorio">${icon("shuffle",20)}</button>
@@ -288,7 +325,6 @@
           </div>
         </div>
         
-        <!-- Right section -->
         <div class="mp-mini-right">
           <div class="mp-mini-vol-wrap">
             <button class="mp-mini-btn" id="mp-vol-btn">${icon("vol",20)}</button>
@@ -304,7 +340,6 @@
     `;
     document.body.appendChild(root);
 
-    // Audio element (hidden)
     const audio = document.createElement("audio");
     audio.id = "mp-audio";
     audio.preload = "auto";
@@ -344,22 +379,31 @@
       addBtn: $("#mp-add-btn"),
       expandBtn: $("#mp-expand-btn"),
       exp: $("#mp-exp"),
+      expBg: $("#mp-exp-bg"),
       expContainer: $("#mp-exp-container"),
       expMedia: $("#mp-exp-media"),
       expCover: $("#mp-exp-cover"),
       expVideo: $("#mp-exp-video"),
       expSubs: $("#mp-exp-subs"),
-      fullscreenBtn: $("#mp-fullscreen-btn"),
       sidePanel: $("#mp-side-panel"),
       panelTitle: $("#mp-panel-title"),
       panelBody: $("#mp-panel-body"),
       panelClose: $("#mp-panel-close"),
+      videoOverlay: $("#mp-video-overlay"),
+      overlayTitle: $("#mp-overlay-title"),
+      overlayPlay: $("#mp-overlay-play"),
+      overlayPrev: $("#mp-overlay-prev"),
+      overlayNext: $("#mp-overlay-next"),
+      overlayProgress: $("#mp-overlay-progress"),
+      overlayProgressFill: $("#mp-overlay-progress-fill"),
+      overlayCurrent: $("#mp-overlay-current"),
+      overlayDuration: $("#mp-overlay-duration"),
+      overlayExit: $("#mp-overlay-exit"),
     };
     audioEl = $("#mp-audio");
     videoEl = els.expVideo;
   }
 
-  /* ── Active media element ──────────────────────────────── */
   function activeMedia() {
     return S.mode === "video" && S.mediaVideo ? videoEl : audioEl;
   }
@@ -368,20 +412,23 @@
   function updateBg() {
     const c = S.bgColor || "#111";
     els.mini.style.background = `linear-gradient(90deg, ${darken(c,.35)} 0%, ${darken(c,.2)} 100%)`;
+    els.expBg.style.background = `linear-gradient(135deg, ${lighten(c,1.2)} 0%, ${darken(c,.6)} 100%)`;
     const tc = textColor(c);
     els.mini.style.color = tc;
   }
 
   function updateMiniInfo() {
     els.miniCover.src = S.coverUrl || "";
-    els.miniTitle.textContent = S.title;
-    els.miniAuthor.textContent = S.author;
+    els.miniTitle.textContent = S.title || "";
+    els.miniAuthor.textContent = S.author || "";
     els.expCover.src = S.coverUrl || "";
+    els.overlayTitle.textContent = S.title || "";
   }
 
   function updatePlayBtn() {
     const ic = S.playing ? ICO.pause : ICO.play;
     els.playBtn.innerHTML = `<span class="mp-ico" style="width:28px;height:28px">${ic}</span>`;
+    els.overlayPlay.innerHTML = `<span class="mp-ico" style="width:40px;height:40px">${ic}</span>`;
   }
 
   function updateProgress() {
@@ -389,12 +436,39 @@
     els.miniFill.style.width = pct + "%";
     els.curTime.textContent = fmt(S.currentTime);
     els.durTime.textContent = fmt(S.duration);
+    els.overlayProgressFill.style.width = pct + "%";
+    els.overlayCurrent.textContent = fmt(S.currentTime);
+    els.overlayDuration.textContent = fmt(S.duration);
     
     const media = activeMedia();
     if (media && media.buffered && media.buffered.length > 0) {
       const buf = (media.buffered.end(media.buffered.length - 1) / (S.duration || 1)) * 100;
       els.miniBuf.style.width = buf + "%";
     }
+    
+    // Check sleep timer based on actual progress
+    checkSleepTimer();
+  }
+  
+  function checkSleepTimer() {
+    if (S.sleepTimer && S.sleepEndTime) {
+      const remaining = S.sleepEndTime - Date.now();
+      if (remaining <= 0) {
+        // Time's up - stop playback
+        pauseMedia();
+        clearSleepTimer();
+        if (S.panelOpen === "timer") buildTimerPanel();
+      }
+    }
+  }
+  
+  function clearSleepTimer() {
+    if (S.sleepTimer) {
+      clearInterval(S.sleepTimer);
+      S.sleepTimer = null;
+    }
+    S.sleepMinutes = 0;
+    S.sleepEndTime = null;
   }
 
   function updateMode() {
@@ -402,7 +476,6 @@
     if (S.mode === "video" && hasVideo) {
       els.expCover.style.display = "none";
       videoEl.style.display = "block";
-      els.videoControls = $("#mp-video-controls");
     } else {
       els.expCover.style.display = "block";
       videoEl.style.display = "none";
@@ -433,6 +506,15 @@
   /* ── Panel management with side slide ──────────────────── */
   let currentPanelType = null;
 
+  function openPanelWithExpand(type) {
+    if (!S.expanded) {
+      S.pendingPanel = type;
+      expand();
+    } else {
+      openPanel(type);
+    }
+  }
+
   function openPanel(type) {
     const titles = {
       queue: "A continuación",
@@ -449,13 +531,11 @@
     els.panelTitle.textContent = titles[type] || "Panel";
     currentPanelType = type;
     
-    // Build panel content
     if (type === "queue") buildQueuePanel();
     if (type === "speed") buildSpeedPanel();
     if (type === "timer") buildTimerPanel();
     if (type === "share") buildSharePanel();
     
-    // Animate media to 60% and show panel
     els.expMedia.classList.add("with-panel");
     els.sidePanel.classList.add("open");
     S.panelOpen = type;
@@ -486,27 +566,29 @@
 
   function buildTimerPanel() {
     const opts = [5,10,15,30,45,60,90,120];
+    let remaining = 0;
+    if (S.sleepEndTime) {
+      remaining = Math.max(0, (S.sleepEndTime - Date.now()) / 1000);
+    }
+    
     let html = '<div class="mp-timer-grid">' + opts.map(m =>
       `<div class="mp-timer-opt${S.sleepMinutes===m?" active":""}" data-min="${m}">${m} min</div>`
     ).join("") + `<div class="mp-timer-opt${!S.sleepMinutes?" active":""}" data-min="0">Apagar</div></div>`;
-    if (S.sleepTimer) {
-      const rem = Math.max(0, S.sleepMinutes * 60 - (Date.now() - S._timerStart) / 1000);
-      html += `<div class="mp-timer-status">⏱ Quedan ${fmt(rem)}</div>`;
+    if (remaining > 0) {
+      html += `<div class="mp-timer-status">⏱ Quedan ${fmt(remaining)}</div>`;
     }
     els.panelBody.innerHTML = html;
     $$(".mp-timer-opt", els.panelBody).forEach(el => {
       el.onclick = () => {
         const m = parseInt(el.dataset.min);
-        if (S.sleepTimer) clearTimeout(S.sleepTimer);
-        S.sleepTimer = null;
+        clearSleepTimer();
         S.sleepMinutes = m;
         if (m > 0) {
-          S._timerStart = Date.now();
-          S.sleepTimer = setTimeout(() => {
-            pauseMedia();
-            S.sleepTimer = null;
-            S.sleepMinutes = 0;
-          }, m * 60 * 1000);
+          S.sleepEndTime = Date.now() + (m * 60 * 1000);
+          S.sleepTimer = setInterval(() => {
+            checkSleepTimer();
+            if (S.panelOpen === "timer") buildTimerPanel();
+          }, 1000);
         }
         buildTimerPanel();
       };
@@ -701,23 +783,28 @@
     if (!document.fullscreenElement) {
       videoEl.requestFullscreen().catch(() => {});
       S.videoFullscreen = true;
+      showVideoOverlay();
     } else {
       document.exitFullscreen();
       S.videoFullscreen = false;
+      hideVideoOverlay();
     }
   }
-
-  function showVideoControls() {
-    const controls = $("#mp-video-controls");
-    if (controls) {
-      controls.style.opacity = "1";
-      if (S.videoControlsTimeout) clearTimeout(S.videoControlsTimeout);
-      S.videoControlsTimeout = setTimeout(() => {
-        if (!S.videoFullscreen) {
-          controls.style.opacity = "0";
-        }
-      }, 2000);
-    }
+  
+  function showVideoOverlay() {
+    els.videoOverlay.classList.add("active");
+    updateOverlayProgress();
+  }
+  
+  function hideVideoOverlay() {
+    els.videoOverlay.classList.remove("active");
+  }
+  
+  function updateOverlayProgress() {
+    const pct = S.duration ? (S.currentTime / S.duration) * 100 : 0;
+    els.overlayProgressFill.style.width = pct + "%";
+    els.overlayCurrent.textContent = fmt(S.currentTime);
+    els.overlayDuration.textContent = fmt(S.duration);
   }
 
   /* ── Subtitles ─────────────────────────────────────────── */
@@ -773,6 +860,13 @@
     els.exp.classList.add("open");
     document.body.style.overflow = "hidden";
     updateMode();
+    
+    if (S.pendingPanel) {
+      setTimeout(() => {
+        openPanel(S.pendingPanel);
+        S.pendingPanel = null;
+      }, 400);
+    }
   }
 
   function collapse() {
@@ -780,18 +874,25 @@
     els.exp.classList.remove("open");
     closePanel();
     document.body.style.overflow = "";
+    S.pendingPanel = null;
+  }
+
+  function toggleExpand() {
+    if (S.expanded) {
+      collapse();
+    } else {
+      expand();
+    }
   }
 
   /* ── Events ────────────────────────────────────────────── */
   function bindEvents() {
-    // Playback controls
     els.playBtn.onclick = togglePlay;
     els.prevBtn.onclick = prevTrack;
     els.nextBtn.onclick = nextTrack;
     els.rewindBtn.onclick = () => skip(-15);
     els.forwardBtn.onclick = () => skip(15);
     
-    // Repeat & Shuffle
     els.repeatBtn.onclick = () => {
       S.repeat = !S.repeat;
       updateRepeatUI();
@@ -801,55 +902,54 @@
       updateShuffleUI();
     };
     
-    // Like
     els.likeBtn.onclick = () => {
       S.liked = !S.liked;
       updateLikeUI();
     };
     
-    // Speed
-    els.speedBtn.onclick = () => openPanel("speed");
+    els.speedBtn.onclick = () => openPanelWithExpand("speed");
+    els.timerBtn.onclick = () => openPanelWithExpand("timer");
+    els.addBtn.onclick = () => openPanelWithExpand("queue");
+    els.expandBtn.onclick = toggleExpand;
     
-    // Timer
-    els.timerBtn.onclick = () => openPanel("timer");
-    
-    // Queue/Add
-    els.addBtn.onclick = () => openPanel("queue");
-    
-    // Expand
-    els.expandBtn.onclick = expand;
-    
-    // Close expanded
-    const closeExpanded = () => collapse();
-    // Add close button in expanded view header
-    const expHeader = ce("div", "mp-exp-header");
-    expHeader.style.cssText = "position:absolute;top:20px;left:20px;z-index:15";
-    expHeader.innerHTML = `<button class="mp-panel-close" style="background:rgba(0,0,0,.5);backdrop-filter:blur(8px)">${icon("close",28)}</button>`;
-    els.exp.appendChild(expHeader);
-    expHeader.querySelector("button").onclick = closeExpanded;
-    
-    // Panel close
     els.panelClose.onclick = closePanel;
     
-    // Progress bar
     els.miniProg.onclick = (e) => {
       const r = els.miniProg.getBoundingClientRect();
       seekTo((e.clientX - r.left) / r.width);
     };
     
-    // Volume
     els.volBtn.onclick = () => { setVolume(S.muted ? (S.volume || 1) : 0); };
     els.volBar.onclick = (e) => {
       const r = els.volBar.getBoundingClientRect();
       setVolume((e.clientX - r.left) / r.width);
     };
     
-    // Fullscreen
-    els.fullscreenBtn.onclick = toggleFullscreen;
+    // Fullscreen overlay controls
+    els.overlayPlay.onclick = togglePlay;
+    els.overlayPrev.onclick = prevTrack;
+    els.overlayNext.onclick = nextTrack;
+    els.overlayExit.onclick = toggleFullscreen;
+    els.overlayProgress.onclick = (e) => {
+      const r = els.overlayProgress.getBoundingClientRect();
+      seekTo((e.clientX - r.left) / r.width);
+    };
     
-    // Video hover controls
-    videoEl.addEventListener("mouseenter", showVideoControls);
-    videoEl.addEventListener("mousemove", showVideoControls);
+    // Close expanded with close button
+    const closeBtn = ce("button", "mp-panel-close");
+    closeBtn.style.cssText = "position:absolute;top:20px;left:20px;z-index:15;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);border-radius:50%;padding:10px";
+    closeBtn.innerHTML = icon("close", 24);
+    els.exp.appendChild(closeBtn);
+    closeBtn.onclick = collapse;
+    
+    // Video hover for fullscreen button
+    videoEl.addEventListener("mouseenter", () => {
+      if (S.mode === "video" && !S.videoFullscreen) {
+        const fsBtn = $("#mp-video-fs-btn");
+        if (fsBtn) fsBtn.style.opacity = "1";
+      }
+    });
+    
     videoEl.addEventListener("click", () => {
       if (S.mode === "video") togglePlay();
     });
@@ -862,6 +962,7 @@
       S.duration = m.duration || 0;
       updateProgress();
       if (S.subtitlesUrl) updateSubtitles();
+      if (els.videoOverlay.classList.contains("active")) updateOverlayProgress();
     }
     
     function onEnded() {
@@ -889,6 +990,7 @@
       if (e.code === "ArrowLeft") skip(-10);
       if (e.code === "ArrowUp") { e.preventDefault(); setVolume(S.volume + 0.1); }
       if (e.code === "ArrowDown") { e.preventDefault(); setVolume(S.volume - 0.1); }
+      if (e.code === "KeyF") { e.preventDefault(); toggleFullscreen(); }
     });
   }
 
@@ -906,7 +1008,6 @@
     playMedia();
   };
 
-  /* ── Auto-init on DOM ready ────────────────────────────── */
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => { buildUI(); refs(); bindEvents(); });
   } else {
