@@ -1,1016 +1,1073 @@
 /**
- * ═══════════════════════════════════════════════════════════════
- *  MEDIA PLAYER — YouTube Music + Spotify Style
- *  Enhanced version with persistent bottom bar & side panels
- *  v3.0 - Full features
- * ═══════════════════════════════════════════════════════════════
+ * Mobile Media Player — Spotify + YouTube Music Style
+ * Touch gestures, Media Session API, dynamic colors, subtitles
+ * Single standalone file — attach via <script src="player-mobile.js"></script>
+ *
+ * API: window.playEpisodeExpanded(mediaUrl, mediaVideo, initialMode, coverUrl, coverInfo, title, detailUrl, author, queue, text, subtitlesUrl, bgColor, allowDownload)
  */
 (function () {
-  "use strict";
+  'use strict';
 
-  /* ── State ─────────────────────────────────────────────── */
-  const S = {
-    playing: false,
-    expanded: false,
-    mode: "audio",
-    mediaUrl: "",
-    mediaVideo: "",
-    coverUrl: "",
-    coverInfo: "",
-    title: "",
-    detailUrl: "",
-    author: "",
-    queue: [],
-    queueIndex: -1,
-    text: "",
-    subtitlesUrl: "",
-    bgColor: "#111",
-    allowDownload: false,
-    subtitlesOn: false,
-    subtitlesCues: [],
-    speed: 1,
-    sleepTimer: null,
-    sleepMinutes: 0,
-    sleepEndTime: null,
-    panelOpen: null,
-    duration: 0,
-    currentTime: 0,
-    buffered: 0,
-    volume: 1,
-    muted: false,
-    seekDragging: false,
-    repeat: false,
-    shuffle: false,
-    liked: false,
-    videoFullscreen: false,
-    videoControlsVisible: true,
-    videoControlsTimeout: null,
-    pendingPanel: null,
-  };
+  /* ─── helpers ─── */
+  const $ = (s, p) => (p || document).querySelector(s);
+  const $$ = (s, p) => [...(p || document).querySelectorAll(s)];
+  const ce = (t) => document.createElement(t);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const fmt = (s) => { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${m}:${sec < 10 ? '0' : ''}${sec}`; };
+  function hexToHSL(hex) {
+    hex = hex.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16) / 255;
+    const g = parseInt(hex.substring(2, 4), 16) / 255;
+    const b = parseInt(hex.substring(4, 6), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+      else if (max === g) h = ((b - r) / d + 2) / 6;
+      else h = ((r - g) / d + 4) / 6;
+    }
+    return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+  }
+  function luminance(hex) {
+    hex = hex.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16) / 255;
+    const g = parseInt(hex.substring(2, 4), 16) / 255;
+    const b = parseInt(hex.substring(4, 6), 16) / 255;
+    return 0.299 * r + 0.587 * g + 0.114 * b;
+  }
+  function textColor(hex) { return luminance(hex) > 0.55 ? '#111' : '#fff'; }
+  function textColorSub(hex) { return luminance(hex) > 0.55 ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.6)'; }
 
-  /* ── Helpers ───────────────────────────────────────────── */
-  const $ = (sel, ctx) => (ctx || document).querySelector(sel);
-  const $$ = (sel, ctx) => [...(ctx || document).querySelectorAll(sel)];
-  const ce = (tag, cls, html) => {
-    const el = document.createElement(tag);
-    if (cls) el.className = cls;
-    if (html) el.innerHTML = html;
-    return el;
-  };
-  const fmt = (s) => {
-    if (!s || !isFinite(s)) return "0:00";
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return m + ":" + (sec < 10 ? "0" : "") + sec;
-  };
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const hexToRgb = (h) => {
-    h = h.replace("#", "");
-    if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
-    return [parseInt(h.substr(0,2),16), parseInt(h.substr(2,2),16), parseInt(h.substr(4,2),16)];
-  };
-  const darken = (hex, f) => {
-    const [r,g,b] = hexToRgb(hex);
-    return `rgb(${Math.round(r*f)},${Math.round(g*f)},${Math.round(b*f)})`;
-  };
-  const lighten = (hex, f) => {
-    const [r,g,b] = hexToRgb(hex);
-    return `rgb(${Math.min(255, Math.round(r*f))},${Math.min(255, Math.round(g*f))},${Math.min(255, Math.round(b*f))})`;
-  };
-  const luminance = (hex) => {
-    const [r,g,b] = hexToRgb(hex);
-    return (0.299*r + 0.587*g + 0.114*b) / 255;
-  };
-  const textColor = (hex) => luminance(hex) > 0.55 ? "#111" : "#fff";
-
-  /* ── Icons (inline SVG) ────────────────────────────────── */
-  const ICO = {
+  /* ─── SVG icons ─── */
+  const icons = {
     play: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`,
-    pause: `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`,
-    next: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>`,
-    prev: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>`,
-    vol: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8.14v7.72A4.5 4.5 0 0016.5 12zM14 3.23v2.06a6.51 6.51 0 010 13.42v2.06A8.5 8.5 0 0014 3.23z"/></svg>`,
-    volMute: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12A4.5 4.5 0 0014 8.14v2.12l2.45 2.45c.03-.24.05-.48.05-.71zm2.5 0a6.45 6.45 0 01-.57 2.65l1.46 1.46A8.43 8.43 0 0021 12a8.5 8.5 0 00-7-8.77v2.06A6.51 6.51 0 0119 12zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.46 8.46 0 003.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4l-1.88 1.88L12 7.76V4z"/></svg>`,
-    expand: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg>`,
-    collapse: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/></svg>`,
-    queue: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18A3 3 0 1020 17V8h3V6h-6z"/></svg>`,
-    speed: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.38 8.57l-1.23 1.85a8 8 0 01-.22 7.58H5.07A8 8 0 0115.58 6.85l1.85-1.23A10 10 0 003.35 19a2 2 0 001.72 1h13.85a2 2 0 001.74-1 10 10 0 00-.27-10.44z"/><path d="M10.59 15.41a2 2 0 002.83 0l5.66-8.49-8.49 5.66a2 2 0 000 2.83z"/></svg>`,
-    timer: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42A10.93 10.93 0 0012 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-2.12-.66-4.08-1.78-5.7l-.19.09zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>`,
-    share: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08a2.91 2.91 0 00-1.96.77L8.91 12.7A3.25 3.25 0 009 12c0-.24-.03-.47-.09-.7l7.05-4.11A2.93 2.93 0 0018 7.92a3 3 0 10-3-3c0 .24.04.47.09.7L8.04 9.74A3 3 0 006 9a3 3 0 000 6c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.92 2.92 2.92A2.92 2.92 0 0021 19a2.92 2.92 0 00-3-2.92z"/></svg>`,
-    subtitle: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zM4 18V6h16v12H4zm2-2h2v-2H6v2zm0-4h2v-2H6v2zm4 4h8v-2h-8v2zm0-4h8v-2h-8v2z"/></svg>`,
-    close: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>`,
+    pause: `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>`,
+    prev: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>`,
+    next: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 18h2V6h-2zM5.5 12 14 6v12z" transform="rotate(180 12 12)"/></svg>`,
+    rewind: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><text x="12" y="15.5" text-anchor="middle" font-size="7" font-weight="bold" fill="currentColor">10</text></svg>`,
+    forward: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.01 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/><text x="12" y="15.5" text-anchor="middle" font-size="7" font-weight="bold" fill="currentColor">10</text></svg>`,
+    chevronDown: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
+    queue: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 10h12v2H4zm0-4h12v2H4zm0 8h8v2H4zm10 0v6l5-3z"/></svg>`,
+    speed: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.38 8.57l-1.23 1.85a8 8 0 01-.22 7.58H5.07A8 8 0 0115.58 6.85l1.85-1.23A10 10 0 003 12a10 10 0 0020 0c0-1.22-.22-2.39-.62-3.43zM12 8v4l3 3"/></svg>`,
+    timer: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61 1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0012 4c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>`,
+    share: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 000-6 3 3 0 00-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 000 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a2.88 2.88 0 002.88 2.88A2.88 2.88 0 0020.88 19a2.88 2.88 0 00-2.88-2.92z"/></svg>`,
+    subtitle: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6zm0 4h8v2H6zm10 0h2v2h-2zm-6-4h8v2h-8z"/></svg>`,
     download: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`,
-    videoIcon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1v-3.5l4 4v-11l-4 4z"/></svg>`,
-    audioIcon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1014 17V7h4V3h-6z"/></svg>`,
+    video: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`,
+    audio: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>`,
+    close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    more: `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>`,
     repeat: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`,
     shuffle: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>`,
-    rewind15: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><path d="M10.5 13.5h2v-4h-2v4zM14.5 13.5h2v-4h-2v4z"/></svg>`,
-    forward15: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/><path d="M10.5 13.5h2v-4h-2v4zM14.5 13.5h2v-4h-2v4z"/></svg>`,
-    like: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`,
-    liked: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="red"/></svg>`,
-    fullscreen: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>`,
-    exitFullscreen: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>`,
+    info: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>`,
   };
-  const icon = (name, size) => `<span class="mp-ico" style="width:${size||20}px;height:${size||20}px">${ICO[name]||""}</span>`;
 
-  /* ── Build DOM ─────────────────────────────────────────── */
-  const CSS = `
-  /* Reset scoped */
-  #mp-root,.mp-root *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  #mp-root{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;position:fixed;bottom:0;left:0;right:0;z-index:999999;pointer-events:none}
-  #mp-root *{pointer-events:auto}
-  .mp-ico{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-  .mp-ico svg{width:100%;height:100%}
+  /* ─── STYLES ─── */
+  const style = ce('style');
+  style.textContent = `
+/* Reset for player */
+.mp-m *, .mp-m *::before, .mp-m *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.mp-m { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+.mp-m button { background: none; border: none; cursor: pointer; outline: none; color: inherit; -webkit-tap-highlight-color: transparent; }
+.mp-m svg { width: 100%; height: 100%; display: block; }
 
-  /* ── Mini bar (persistent bottom bar) ────────── */
-  .mp-mini{display:none;background:#181818;color:#fff;position:fixed;bottom:0;left:0;right:0;z-index:1000000;border-top:1px solid rgba(255,255,255,.08);transition:background .4s}
-  .mp-mini.visible{display:block}
-  
-  .mp-mini-progress{height:3px;background:rgba(255,255,255,.15);cursor:pointer;position:relative}
-  .mp-mini-progress-fill{height:100%;background:#fff;border-radius:0 2px 2px 0;transition:width .1s linear;position:relative}
-  .mp-mini-progress-fill::after{content:'';position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:10px;height:10px;background:#fff;border-radius:50%;opacity:0;transition:opacity .15s}
-  .mp-mini-progress:hover .mp-mini-progress-fill::after{opacity:1}
-  .mp-mini-progress-buf{position:absolute;top:0;left:0;height:100%;background:rgba(255,255,255,.15);pointer-events:none}
-  
-  .mp-mini-content{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;height:80px;gap:20px}
-  
-  /* Left section - fixed width */
-  .mp-mini-left{display:flex;align-items:center;gap:16px;flex:0 0 280px;min-width:0}
-  .mp-mini-cover{width:56px;height:56px;border-radius:8px;object-fit:cover;cursor:pointer;flex-shrink:0;box-shadow:0 4px 12px rgba(0,0,0,.3)}
-  .mp-mini-info{flex:1;min-width:0;cursor:pointer}
-  .mp-mini-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .mp-mini-author{font-size:12px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .mp-mini-add{background:none;border:none;color:#fff;cursor:pointer;padding:8px;border-radius:50%;opacity:.7;transition:all .2s;flex-shrink:0}
-  .mp-mini-add:hover{opacity:1;transform:scale(1.1)}
-  
-  /* Center controls - fixed width and centered */
-  .mp-mini-center{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;justify-content:center}
-  .mp-mini-controls{display:flex;align-items:center;gap:12px;justify-content:center}
-  .mp-mini-btn{background:none;border:none;color:inherit;cursor:pointer;padding:8px;border-radius:50%;transition:all .15s;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-  .mp-mini-btn:hover{background:rgba(255,255,255,.1);transform:scale(1.05)}
-  .mp-mini-btn:active{transform:scale(.95)}
-  .mp-mini-play{width:44px;height:44px;background:#fff!important;color:#000!important;border-radius:50%;padding:0}
-  .mp-mini-play:hover{transform:scale(1.08)}
-  .mp-mini-time{display:flex;align-items:center;gap:12px;font-size:11px;color:rgba(255,255,255,.6)}
-  .mp-mini-time span{min-width:40px;font-variant-numeric:tabular-nums}
-  .mp-mini-time .mp-sep{flex:1;height:2px;background:rgba(255,255,255,.1);border-radius:2px;min-width:100px}
-  
-  /* Right section - fixed width */
-  .mp-mini-right{display:flex;align-items:center;gap:16px;flex:0 0 280px;justify-content:flex-end}
-  .mp-mini-vol-wrap{display:flex;align-items:center;gap:8px}
-  .mp-mini-vol-bar{width:80px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;cursor:pointer;position:relative}
-  .mp-mini-vol-fill{height:100%;background:#fff;border-radius:2px;pointer-events:none}
-  .mp-speed-badge{padding:4px 12px;background:rgba(255,255,255,.1);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
-  .mp-speed-badge:hover{background:rgba(255,255,255,.2)}
-  .mp-like-btn{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;padding:8px;border-radius:50%;transition:all .2s;display:inline-flex;align-items:center;flex-shrink:0}
-  .mp-like-btn:hover{transform:scale(1.1)}
-  .mp-like-btn.active{color:#ff4444}
+/* Mini bar */
+.mp-mini-m {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 99999;
+  height: 64px; display: flex; align-items: center;
+  padding: 0 8px; gap: 10px;
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.3s;
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.25);
+  will-change: transform;
+}
+.mp-mini-m.hidden { transform: translateY(100%); opacity: 0; pointer-events: none; }
+.mp-mini-m .mp-mini-cover { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+.mp-mini-m .mp-mini-info { flex: 1; min-width: 0; }
+.mp-mini-m .mp-mini-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-mini-m .mp-mini-author { font-size: 11px; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-mini-m .mp-mini-btn { width: 36px; height: 36px; padding: 6px; flex-shrink: 0; border-radius: 50%; }
+.mp-mini-m .mp-mini-btn:active { opacity: 0.5; }
+.mp-mini-m .mp-mini-progress { position: absolute; top: 0; left: 0; right: 0; height: 2.5px; background: rgba(255,255,255,0.15); }
+.mp-mini-m .mp-mini-progress-fill { height: 100%; width: 0%; transition: width 0.3s linear; }
 
-  /* ── Expanded view with dynamic background ───── */
-  .mp-expanded{position:fixed;bottom:80px;left:0;right:0;top:0;display:flex;transform:translateY(100%);transition:transform .38s cubic-bezier(.16,1,.3,1);overflow:hidden;z-index:999998}
-  .mp-expanded.open{transform:translateY(0)}
-  .mp-expanded-bg{position:absolute;top:0;left:0;right:0;bottom:0;transition:background .5s ease;z-index:0}
-  
-  .mp-exp-container{display:flex;width:100%;height:100%;transition:all .3s ease;position:relative;z-index:1}
-  .mp-exp-media{flex:1;display:flex;align-items:center;justify-content:center;position:relative;transition:flex .3s ease;background:transparent}
-  .mp-exp-media.with-panel{flex:0 0 60%}
-  .mp-exp-cover{max-width:80%;max-height:80%;object-fit:contain;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);transition:all .3s}
-  .mp-exp-video{width:100%;height:100%;object-fit:contain;background:#000}
-  
-  /* Video controls overlay for fullscreen */
-  .mp-video-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);z-index:1000001;display:none;flex-direction:column;justify-content:space-between;align-items:center;backdrop-filter:blur(10px)}
-  .mp-video-overlay.active{display:flex}
-  .mp-video-overlay-top{position:absolute;top:0;left:0;right:0;padding:20px;background:linear-gradient(180deg, rgba(0,0,0,.7) 0%, transparent 100%)}
-  .mp-video-overlay-title{font-size:18px;font-weight:600;text-align:center;color:#fff}
-  .mp-video-overlay-center{display:flex;align-items:center;justify-content:center;gap:40px;flex:1}
-  .mp-video-overlay-btn{background:rgba(255,255,255,.2);border:none;color:#fff;width:60px;height:60px;border-radius:50%;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
-  .mp-video-overlay-btn:hover{background:rgba(255,255,255,.4);transform:scale(1.1)}
-  .mp-video-overlay-play{width:80px;height:80px;background:rgba(255,255,255,.3)}
-  .mp-video-overlay-bottom{position:absolute;bottom:0;left:0;right:0;padding:20px;background:linear-gradient(0deg, rgba(0,0,0,.7) 0%, transparent 100%)}
-  .mp-video-overlay-progress{height:4px;background:rgba(255,255,255,.3);border-radius:2px;cursor:pointer;margin-bottom:12px}
-  .mp-video-overlay-progress-fill{height:100%;background:#fff;border-radius:2px;width:0%}
-  .mp-video-overlay-time{display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px}
-  .mp-video-overlay-exit{position:absolute;top:20px;right:20px;background:rgba(0,0,0,.5);border:none;color:#fff;padding:10px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
-  
-  .mp-exp-subs{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);text-align:center;font-size:clamp(18px,4vw,32px);font-weight:700;line-height:1.4;max-width:80%;text-shadow:0 2px 12px rgba(0,0,0,.7);pointer-events:none;z-index:2}
-  
-  /* Side panel */
-  .mp-exp-panel{position:fixed;right:0;top:0;bottom:0;width:40%;background:rgba(20,20,20,.98);backdrop-filter:blur(20px);transform:translateX(100%);transition:transform .3s ease;z-index:20;display:flex;flex-direction:column;border-left:1px solid rgba(255,255,255,.1)}
-  .mp-exp-panel.open{transform:translateX(0)}
-  .mp-panel-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,.1)}
-  .mp-panel-header h3{font-size:18px;font-weight:700}
-  .mp-panel-close{background:none;border:none;color:#fff;cursor:pointer;padding:8px;border-radius:50%;transition:background .15s;display:inline-flex;align-items:center}
-  .mp-panel-close:hover{background:rgba(255,255,255,.1)}
-  .mp-panel-body{flex:1;overflow-y:auto;padding:16px 24px}
-  
-  /* Queue items */
-  .mp-queue-item{display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;transition:background .15s;margin-bottom:4px}
-  .mp-queue-item:hover{background:rgba(255,255,255,.08)}
-  .mp-queue-item.active{background:rgba(255,255,255,.12)}
-  .mp-queue-img{width:48px;height:48px;border-radius:6px;object-fit:cover;flex-shrink:0}
-  .mp-queue-info{flex:1;min-width:0}
-  .mp-queue-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .mp-queue-author{font-size:12px;opacity:.6}
-  
-  /* Speed grid */
-  .mp-speed-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-  .mp-speed-opt{background:rgba(255,255,255,.08);border:2px solid transparent;border-radius:12px;padding:14px;text-align:center;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s}
-  .mp-speed-opt:hover{background:rgba(255,255,255,.12)}
-  .mp-speed-opt.active{border-color:#1db954;background:rgba(29,185,84,.15)}
-  
-  /* Timer grid */
-  .mp-timer-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-  .mp-timer-opt{background:rgba(255,255,255,.08);border:2px solid transparent;border-radius:12px;padding:14px;text-align:center;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s}
-  .mp-timer-opt:hover{background:rgba(255,255,255,.12)}
-  .mp-timer-opt.active{border-color:#1db954;background:rgba(29,185,84,.15)}
-  .mp-timer-status{text-align:center;padding:16px;font-size:13px;opacity:.6}
-  
-  /* Share grid */
-  .mp-share-grid{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
-  .mp-share-btn{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;border-radius:12px;background:rgba(255,255,255,.08);border:none;color:#fff;cursor:pointer;min-width:90px;font-size:12px;transition:all .15s}
-  .mp-share-btn:hover{background:rgba(255,255,255,.15);transform:translateY(-2px)}
-  
-  /* Responsive */
-  @media(max-width:768px){
-    .mp-mini-left{flex:0 0 200px}
-    .mp-mini-right{flex:0 0 200px}
-    .mp-mini-vol-bar{width:60px}
-    .mp-exp-panel{width:100%}
-    .mp-exp-media.with-panel{flex:0 0 100%}
-    .mp-mini-time .mp-sep{min-width:50px}
-  }
+/* Expanded */
+.mp-exp-m {
+  position: fixed; inset: 0; z-index: 100000;
+  display: flex; flex-direction: column;
+  transition: transform 0.38s cubic-bezier(0.4,0,0.2,1);
+  transform: translateY(100%);
+  overflow: hidden;
+  will-change: transform;
+}
+.mp-exp-m.open { transform: translateY(0); }
+.mp-exp-m.dragging { transition: none; }
+
+/* Drag handle */
+.mp-exp-handle {
+  width: 100%; display: flex; justify-content: center; padding: 10px 0 4px; flex-shrink: 0;
+}
+.mp-exp-handle span { width: 36px; height: 4px; border-radius: 4px; background: rgba(255,255,255,0.35); }
+
+/* Header row */
+.mp-exp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px 8px; flex-shrink: 0;
+}
+.mp-exp-header button { width: 32px; height: 32px; padding: 4px; border-radius: 50%; }
+.mp-exp-header button:active { background: rgba(255,255,255,0.1); }
+
+/* Media area */
+.mp-media-area {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden; min-height: 0;
+  padding: 0 24px;
+}
+.mp-media-area img {
+  max-width: 100%; max-height: 100%; border-radius: 12px;
+  object-fit: cover; box-shadow: 0 8px 40px rgba(0,0,0,0.35);
+  aspect-ratio: 1; width: min(85vw, 360px);
+}
+.mp-media-area video {
+  max-width: 100%; max-height: 100%; border-radius: 8px;
+  object-fit: contain; background: #000;
+}
+.mp-subtitles-overlay {
+  position: absolute; bottom: 16px; left: 16px; right: 16px;
+  text-align: center; font-size: 15px; font-weight: 500;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.7);
+  padding: 6px 12px; border-radius: 6px;
+  background: rgba(0,0,0,0.45); line-height: 1.4;
+}
+/* Subtitle full screen (audio mode) */
+.mp-subtitle-full {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; padding: 24px;
+  text-align: center; font-size: 22px; font-weight: 600;
+  line-height: 1.5; letter-spacing: 0.01em;
+}
+
+/* Controls area */
+.mp-controls-area { flex-shrink: 0; padding: 0 20px 8px; }
+.mp-track-info { text-align: center; margin-bottom: 12px; }
+.mp-track-title { font-size: 18px; font-weight: 700; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-track-author { font-size: 13px; opacity: 0.6; }
+.mp-track-author a { color: inherit; text-decoration: underline; opacity: 0.8; }
+
+/* Progress bar */
+.mp-progress-wrap { margin-bottom: 8px; position: relative; padding: 8px 0; }
+.mp-progress-track { width: 100%; height: 3px; border-radius: 3px; background: rgba(255,255,255,0.2); position: relative; overflow: visible; }
+.mp-progress-fill { height: 100%; border-radius: 3px; position: relative; width: 0%; transition: width 0.15s linear; }
+.mp-progress-thumb {
+  position: absolute; right: -7px; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 6px rgba(0,0,0,0.3);
+  opacity: 0; transition: opacity 0.2s;
+}
+.mp-progress-wrap.active .mp-progress-thumb { opacity: 1; }
+.mp-progress-wrap.active .mp-progress-track { height: 5px; }
+.mp-times { display: flex; justify-content: space-between; font-size: 11px; opacity: 0.5; margin-top: 4px; }
+
+/* Main control buttons */
+.mp-main-btns { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px; }
+.mp-main-btns button { border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.mp-main-btns button:active { transform: scale(0.9); }
+.mp-ctrl-sm { width: 36px; height: 36px; padding: 7px; }
+.mp-ctrl-md { width: 44px; height: 44px; padding: 8px; }
+.mp-ctrl-play { width: 58px; height: 58px; padding: 12px; border-radius: 50%; }
+
+/* Extra buttons row */
+.mp-extra-btns { display: flex; align-items: center; justify-content: space-around; padding: 4px 8px 6px; }
+.mp-extra-btns button { width: 34px; height: 34px; padding: 6px; border-radius: 50%; opacity: 0.7; position: relative; }
+.mp-extra-btns button.active { opacity: 1; }
+.mp-extra-btns button:active { opacity: 0.5; }
+.mp-extra-btns .mp-badge {
+  position: absolute; top: 0; right: 0; font-size: 8px; font-weight: 700;
+  background: currentColor; width: 16px; height: 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Panel overlay */
+.mp-panel-m {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  max-height: 65vh; border-radius: 16px 16px 0 0;
+  background: rgba(30,30,30,0.97); color: #fff;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  z-index: 10; overflow: hidden;
+  display: flex; flex-direction: column;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+.mp-panel-m.open { transform: translateY(0); }
+.mp-panel-m.dragging { transition: none; }
+.mp-panel-handle { display: flex; justify-content: center; padding: 10px 0 6px; flex-shrink: 0; }
+.mp-panel-handle span { width: 36px; height: 4px; border-radius: 4px; background: rgba(255,255,255,0.3); }
+.mp-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 0 16px 10px; flex-shrink: 0; }
+.mp-panel-head h3 { font-size: 16px; font-weight: 700; }
+.mp-panel-head button { width: 28px; height: 28px; padding: 4px; border-radius: 50%; }
+.mp-panel-body { flex: 1; overflow-y: auto; padding: 0 16px 24px; -webkit-overflow-scrolling: touch; }
+
+/* Queue item */
+.mp-queue-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.06); border-radius: 8px;
+}
+.mp-queue-item:active { background: rgba(255,255,255,0.06); }
+.mp-queue-item img { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; }
+.mp-queue-item .qi-info { flex: 1; min-width: 0; }
+.mp-queue-item .qi-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-queue-item .qi-author { font-size: 12px; opacity: 0.5; }
+.mp-queue-item.playing { background: rgba(255,255,255,0.08); }
+
+/* Speed options */
+.mp-speed-opt {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 4px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 15px; font-weight: 500;
+}
+.mp-speed-opt.active { font-weight: 700; }
+.mp-speed-opt .dot { width: 8px; height: 8px; border-radius: 50%; background: #1db954; display: none; }
+.mp-speed-opt.active .dot { display: block; }
+
+/* Timer options */
+.mp-timer-opt { display: flex; align-items: center; justify-content: space-between; padding: 14px 4px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 15px; }
+.mp-timer-opt.active { font-weight: 700; }
+.mp-timer-opt .check { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); display: flex; align-items: center; justify-content: center; }
+.mp-timer-opt.active .check { border-color: #1db954; background: #1db954; }
+.mp-timer-opt.active .check::after { content: '✓'; color: #000; font-size: 12px; font-weight: 700; }
+
+/* Share buttons */
+.mp-share-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 8px 0; }
+.mp-share-item { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; opacity: 0.8; }
+.mp-share-item button { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.mp-share-item button:active { transform: scale(0.9); }
+
+/* Info panel */
+.mp-info-content { font-size: 14px; line-height: 1.7; opacity: 0.8; padding: 4px 0; }
+
+/* Animations */
+@keyframes mp-spin { to { transform: rotate(360deg); } }
+@keyframes mp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.mp-loading { animation: mp-pulse 1.5s ease-in-out infinite; }
+
+/* Safe area */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mp-mini-m { padding-bottom: env(safe-area-inset-bottom); height: calc(64px + env(safe-area-inset-bottom)); }
+  .mp-controls-area { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+}
+
+/* Landscape */
+@media (orientation: landscape) and (max-height: 500px) {
+  .mp-media-area img { width: min(40vw, 200px); }
+  .mp-exp-m { flex-direction: row; }
+  .mp-media-area { width: 45%; }
+  .mp-controls-area { width: 55%; padding-top: 16px; }
+}
+`;
+  document.head.appendChild(style);
+
+  /* ─── State ─── */
+  const state = {
+    mediaUrl: '', mediaVideo: '', mode: 'audio',
+    coverUrl: '', coverInfo: '', title: '', detailUrl: '',
+    author: '', queue: [], text: '', subtitlesUrl: '',
+    bgColor: '#1a1a2e', allowDownload: false,
+    isPlaying: false, isExpanded: false,
+    currentTime: 0, duration: 0,
+    playbackRate: 1, subtitlesOn: false,
+    repeat: 0, shuffle: false,
+    timerEnd: null, timerType: null,
+    cues: [], currentCue: '',
+    queueIndex: -1,
+    initialized: false,
+  };
+
+  /* ─── Audio/Video elements ─── */
+  const audioEl = new Audio();
+  audioEl.preload = 'metadata';
+  const videoEl = ce('video');
+  videoEl.preload = 'metadata';
+  videoEl.playsInline = true;
+  videoEl.setAttribute('playsinline', '');
+  videoEl.setAttribute('webkit-playsinline', '');
+
+  function activeMedia() { return state.mode === 'video' ? videoEl : audioEl; }
+
+  /* ─── Build DOM ─── */
+  const root = ce('div');
+  root.className = 'mp-m';
+
+  // Mini player
+  const mini = ce('div');
+  mini.className = 'mp-mini-m hidden';
+  mini.innerHTML = `
+    <div class="mp-mini-progress"><div class="mp-mini-progress-fill"></div></div>
+    <img class="mp-mini-cover" src="" alt="">
+    <div class="mp-mini-info">
+      <div class="mp-mini-title"></div>
+      <div class="mp-mini-author"></div>
+    </div>
+    <button class="mp-mini-btn mp-mini-play" aria-label="Play">${icons.play}</button>
+    <button class="mp-mini-btn mp-mini-next" aria-label="Next">${icons.next}</button>
   `;
 
-  function buildUI() {
-    const style = document.createElement("style");
-    style.textContent = CSS;
-    document.head.appendChild(style);
-
-    const root = ce("div");
-    root.id = "mp-root";
-    root.innerHTML = `
-    <!-- EXPANDED VIEW -->
-    <div class="mp-expanded" id="mp-exp">
-      <div class="mp-expanded-bg" id="mp-exp-bg"></div>
-      <div class="mp-exp-container" id="mp-exp-container">
-        <div class="mp-exp-media" id="mp-exp-media">
-          <img class="mp-exp-cover" id="mp-exp-cover" src="" alt="cover" />
-          <video class="mp-exp-video" id="mp-exp-video" style="display:none" playsinline></video>
-          <div class="mp-exp-subs" id="mp-exp-subs" style="display:none"></div>
-        </div>
+  // Expanded
+  const exp = ce('div');
+  exp.className = 'mp-exp-m';
+  exp.innerHTML = `
+    <div class="mp-exp-handle"><span></span></div>
+    <div class="mp-exp-header">
+      <button class="mp-btn-collapse" aria-label="Minimize">${icons.chevronDown}</button>
+      <span class="mp-exp-source" style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;opacity:0.7;">Reproduciendo</span>
+      <button class="mp-btn-more" aria-label="More">${icons.more}</button>
+    </div>
+    <div class="mp-media-area">
+      <img class="mp-exp-cover" src="" alt="">
+    </div>
+    <div class="mp-controls-area">
+      <div class="mp-track-info">
+        <div class="mp-track-title"></div>
+        <div class="mp-track-author"></div>
       </div>
-      
-      <!-- Side Panel -->
-      <div class="mp-exp-panel" id="mp-side-panel">
-        <div class="mp-panel-header">
-          <h3 id="mp-panel-title">Cola</h3>
-          <button class="mp-panel-close" id="mp-panel-close">${icon("close",24)}</button>
-        </div>
-        <div class="mp-panel-body" id="mp-panel-body"></div>
+      <div class="mp-progress-wrap">
+        <div class="mp-progress-track"><div class="mp-progress-fill"><div class="mp-progress-thumb"></div></div></div>
+        <div class="mp-times"><span class="mp-time-cur">0:00</span><span class="mp-time-dur">0:00</span></div>
+      </div>
+      <div class="mp-main-btns">
+        <button class="mp-ctrl-sm mp-btn-shuffle" aria-label="Shuffle">${icons.shuffle}</button>
+        <button class="mp-ctrl-md mp-btn-prev" aria-label="Previous">${icons.prev}</button>
+        <button class="mp-ctrl-sm mp-btn-rew" aria-label="Rewind 10s">${icons.rewind}</button>
+        <button class="mp-ctrl-play mp-btn-play" aria-label="Play">${icons.play}</button>
+        <button class="mp-ctrl-sm mp-btn-fwd" aria-label="Forward 10s">${icons.forward}</button>
+        <button class="mp-ctrl-md mp-btn-next" aria-label="Next">${icons.next}</button>
+        <button class="mp-ctrl-sm mp-btn-repeat" aria-label="Repeat">${icons.repeat}</button>
+      </div>
+      <div class="mp-extra-btns">
+        <button class="mp-btn-mode" aria-label="Mode">${icons.video}</button>
+        <button class="mp-btn-subtitle" aria-label="Subtitles">${icons.subtitle}</button>
+        <button class="mp-btn-speed" aria-label="Speed">${icons.speed}</button>
+        <button class="mp-btn-timer" aria-label="Timer">${icons.timer}</button>
+        <button class="mp-btn-queue" aria-label="Queue">${icons.queue}</button>
+        <button class="mp-btn-share" aria-label="Share">${icons.share}</button>
       </div>
     </div>
-
-    <!-- Video Overlay for Fullscreen -->
-    <div class="mp-video-overlay" id="mp-video-overlay">
-      <div class="mp-video-overlay-top">
-        <div class="mp-video-overlay-title" id="mp-overlay-title"></div>
-      </div>
-      <button class="mp-video-overlay-exit" id="mp-overlay-exit">${icon("exitFullscreen",24)}</button>
-      <div class="mp-video-overlay-center">
-        <button class="mp-video-overlay-btn" id="mp-overlay-prev">${icon("prev",32)}</button>
-        <button class="mp-video-overlay-btn mp-video-overlay-play" id="mp-overlay-play">${icon("play",40)}</button>
-        <button class="mp-video-overlay-btn" id="mp-overlay-next">${icon("next",32)}</button>
-      </div>
-      <div class="mp-video-overlay-bottom">
-        <div class="mp-video-overlay-progress" id="mp-overlay-progress">
-          <div class="mp-video-overlay-progress-fill" id="mp-overlay-progress-fill"></div>
-        </div>
-        <div class="mp-video-overlay-time">
-          <span id="mp-overlay-current">0:00</span>
-          <span id="mp-overlay-duration">0:00</span>
-        </div>
-      </div>
+    <div class="mp-panel-m">
+      <div class="mp-panel-handle"><span></span></div>
+      <div class="mp-panel-head"><h3></h3><button class="mp-panel-close">${icons.close}</button></div>
+      <div class="mp-panel-body"></div>
     </div>
+  `;
 
-    <!-- MINI BAR -->
-    <div class="mp-mini" id="mp-mini">
-      <div class="mp-mini-progress" id="mp-mini-prog">
-        <div class="mp-mini-progress-buf" id="mp-mini-buf"></div>
-        <div class="mp-mini-progress-fill" id="mp-mini-fill"></div>
-      </div>
-      <div class="mp-mini-content">
-        <div class="mp-mini-left">
-          <img class="mp-mini-cover" id="mp-mini-cover" src="" alt="" />
-          <div class="mp-mini-info" id="mp-mini-info">
-            <div class="mp-mini-title" id="mp-mini-title"></div>
-            <div class="mp-mini-author" id="mp-mini-author"></div>
-          </div>
-          <button class="mp-mini-add" id="mp-add-btn" title="Añadir a lista">${icon("queue",20)}</button>
-        </div>
-        
-        <div class="mp-mini-center">
-          <div class="mp-mini-controls">
-            <button class="mp-mini-btn" id="mp-shuffle-btn" title="Aleatorio">${icon("shuffle",20)}</button>
-            <button class="mp-mini-btn" id="mp-prev-btn" title="Anterior">${icon("prev",24)}</button>
-            <button class="mp-mini-btn" id="mp-rewind-btn" title="Retroceder 15s">${icon("rewind15",24)}</button>
-            <button class="mp-mini-btn mp-mini-play" id="mp-play-btn">${icon("play",28)}</button>
-            <button class="mp-mini-btn" id="mp-forward-btn" title="Avanzar 15s">${icon("forward15",24)}</button>
-            <button class="mp-mini-btn" id="mp-next-btn" title="Siguiente">${icon("next",24)}</button>
-            <button class="mp-mini-btn" id="mp-repeat-btn" title="Repetir">${icon("repeat",20)}</button>
-          </div>
-          <div class="mp-mini-time">
-            <span id="mp-cur-time">0:00</span>
-            <div class="mp-sep"></div>
-            <span id="mp-dur-time">0:00</span>
-          </div>
-        </div>
-        
-        <div class="mp-mini-right">
-          <div class="mp-mini-vol-wrap">
-            <button class="mp-mini-btn" id="mp-vol-btn">${icon("vol",20)}</button>
-            <div class="mp-mini-vol-bar" id="mp-vol-bar"><div class="mp-mini-vol-fill" id="mp-vol-fill" style="width:100%"></div></div>
-          </div>
-          <button class="mp-speed-badge" id="mp-speed-btn">1.0x</button>
-          <button class="mp-mini-btn" id="mp-timer-btn" title="Temporizador">${icon("timer",20)}</button>
-          <button class="mp-like-btn" id="mp-like-btn" title="Me gusta">${icon("like",22)}</button>
-          <button class="mp-mini-btn" id="mp-expand-btn" title="Expandir">${icon("expand",24)}</button>
-        </div>
-      </div>
-    </div>
-    `;
-    document.body.appendChild(root);
+  root.appendChild(mini);
+  root.appendChild(exp);
+  document.body.appendChild(root);
 
-    const audio = document.createElement("audio");
-    audio.id = "mp-audio";
-    audio.preload = "auto";
-    audio.style.display = "none";
-    document.body.appendChild(audio);
+  /* ─── Element references ─── */
+  const els = {
+    mini, exp,
+    miniCover: $('.mp-mini-cover', mini),
+    miniTitle: $('.mp-mini-title', mini),
+    miniAuthor: $('.mp-mini-author', mini),
+    miniPlay: $('.mp-mini-play', mini),
+    miniNext: $('.mp-mini-next', mini),
+    miniProgressFill: $('.mp-mini-progress-fill', mini),
+    expCover: $('.mp-exp-cover', exp),
+    mediaArea: $('.mp-media-area', exp),
+    trackTitle: $('.mp-track-title', exp),
+    trackAuthor: $('.mp-track-author', exp),
+    progressWrap: $('.mp-progress-wrap', exp),
+    progressTrack: $('.mp-progress-track', exp),
+    progressFill: $('.mp-progress-fill', exp),
+    progressThumb: $('.mp-progress-thumb', exp),
+    timeCur: $('.mp-time-cur', exp),
+    timeDur: $('.mp-time-dur', exp),
+    btnPlay: $('.mp-btn-play', exp),
+    btnPrev: $('.mp-btn-prev', exp),
+    btnNext: $('.mp-btn-next', exp),
+    btnRew: $('.mp-btn-rew', exp),
+    btnFwd: $('.mp-btn-fwd', exp),
+    btnShuffle: $('.mp-btn-shuffle', exp),
+    btnRepeat: $('.mp-btn-repeat', exp),
+    btnCollapse: $('.mp-btn-collapse', exp),
+    btnMore: $('.mp-btn-more', exp),
+    btnMode: $('.mp-btn-mode', exp),
+    btnSubtitle: $('.mp-btn-subtitle', exp),
+    btnSpeed: $('.mp-btn-speed', exp),
+    btnTimer: $('.mp-btn-timer', exp),
+    btnQueue: $('.mp-btn-queue', exp),
+    btnShare: $('.mp-btn-share', exp),
+    panel: $('.mp-panel-m', exp),
+    panelHead: $('.mp-panel-head h3', exp),
+    panelBody: $('.mp-panel-body', exp),
+    panelClose: $('.mp-panel-close', exp),
+    handle: $('.mp-exp-handle', exp),
+  };
+
+  /* ─── Colors ─── */
+  function applyColors(hex) {
+    const tc = textColor(hex);
+    const tcs = textColorSub(hex);
+    const hsl = hexToHSL(hex);
+    const bg1 = `hsl(${hsl.h}, ${Math.min(hsl.s + 10, 100)}%, ${clamp(hsl.l - 15, 5, 35)}%)`;
+    const bg2 = `hsl(${hsl.h}, ${Math.min(hsl.s + 5, 100)}%, ${clamp(hsl.l - 30, 3, 20)}%)`;
+    const grad = `linear-gradient(180deg, ${hex} 0%, ${bg1} 45%, ${bg2} 100%)`;
+
+    exp.style.background = grad;
+    exp.style.color = tc;
+    mini.style.background = bg1;
+    mini.style.color = tc;
+
+    els.miniProgressFill.style.background = tc;
+    els.progressFill.style.background = tc;
+    els.progressThumb.style.background = tc;
+
+    const playBg = luminance(hex) > 0.55 ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.95)';
+    const playFg = luminance(hex) > 0.55 ? '#fff' : '#000';
+    els.btnPlay.style.background = playBg;
+    els.btnPlay.style.color = playFg;
+
+    els.timeCur.style.color = tcs;
+    els.timeDur.style.color = tcs;
   }
 
-  /* ── References ─────────────────────────────────────────── */
-  let els = {};
-  let audioEl, videoEl;
-
-  function refs() {
-    els = {
-      mini: $("#mp-mini"),
-      miniCover: $("#mp-mini-cover"),
-      miniTitle: $("#mp-mini-title"),
-      miniAuthor: $("#mp-mini-author"),
-      miniInfo: $("#mp-mini-info"),
-      miniFill: $("#mp-mini-fill"),
-      miniBuf: $("#mp-mini-buf"),
-      miniProg: $("#mp-mini-prog"),
-      curTime: $("#mp-cur-time"),
-      durTime: $("#mp-dur-time"),
-      playBtn: $("#mp-play-btn"),
-      prevBtn: $("#mp-prev-btn"),
-      nextBtn: $("#mp-next-btn"),
-      rewindBtn: $("#mp-rewind-btn"),
-      forwardBtn: $("#mp-forward-btn"),
-      shuffleBtn: $("#mp-shuffle-btn"),
-      repeatBtn: $("#mp-repeat-btn"),
-      volBtn: $("#mp-vol-btn"),
-      volBar: $("#mp-vol-bar"),
-      volFill: $("#mp-vol-fill"),
-      speedBtn: $("#mp-speed-btn"),
-      timerBtn: $("#mp-timer-btn"),
-      likeBtn: $("#mp-like-btn"),
-      addBtn: $("#mp-add-btn"),
-      expandBtn: $("#mp-expand-btn"),
-      exp: $("#mp-exp"),
-      expBg: $("#mp-exp-bg"),
-      expContainer: $("#mp-exp-container"),
-      expMedia: $("#mp-exp-media"),
-      expCover: $("#mp-exp-cover"),
-      expVideo: $("#mp-exp-video"),
-      expSubs: $("#mp-exp-subs"),
-      sidePanel: $("#mp-side-panel"),
-      panelTitle: $("#mp-panel-title"),
-      panelBody: $("#mp-panel-body"),
-      panelClose: $("#mp-panel-close"),
-      videoOverlay: $("#mp-video-overlay"),
-      overlayTitle: $("#mp-overlay-title"),
-      overlayPlay: $("#mp-overlay-play"),
-      overlayPrev: $("#mp-overlay-prev"),
-      overlayNext: $("#mp-overlay-next"),
-      overlayProgress: $("#mp-overlay-progress"),
-      overlayProgressFill: $("#mp-overlay-progress-fill"),
-      overlayCurrent: $("#mp-overlay-current"),
-      overlayDuration: $("#mp-overlay-duration"),
-      overlayExit: $("#mp-overlay-exit"),
-    };
-    audioEl = $("#mp-audio");
-    videoEl = els.expVideo;
-  }
-
-  function activeMedia() {
-    return S.mode === "video" && S.mediaVideo ? videoEl : audioEl;
-  }
-
-  /* ── UI Update helpers ─────────────────────────────────── */
-  function updateBg() {
-    const c = S.bgColor || "#111";
-    els.mini.style.background = `linear-gradient(90deg, ${darken(c,.35)} 0%, ${darken(c,.2)} 100%)`;
-    els.expBg.style.background = `linear-gradient(135deg, ${lighten(c,1.2)} 0%, ${darken(c,.6)} 100%)`;
-    const tc = textColor(c);
-    els.mini.style.color = tc;
-  }
-
-  function updateMiniInfo() {
-    els.miniCover.src = S.coverUrl || "";
-    els.miniTitle.textContent = S.title || "";
-    els.miniAuthor.textContent = S.author || "";
-    els.expCover.src = S.coverUrl || "";
-    els.overlayTitle.textContent = S.title || "";
-  }
-
-  function updatePlayBtn() {
-    const ic = S.playing ? ICO.pause : ICO.play;
-    els.playBtn.innerHTML = `<span class="mp-ico" style="width:28px;height:28px">${ic}</span>`;
-    els.overlayPlay.innerHTML = `<span class="mp-ico" style="width:40px;height:40px">${ic}</span>`;
-  }
-
-  function updateProgress() {
-    const pct = S.duration ? (S.currentTime / S.duration) * 100 : 0;
-    els.miniFill.style.width = pct + "%";
-    els.curTime.textContent = fmt(S.currentTime);
-    els.durTime.textContent = fmt(S.duration);
-    els.overlayProgressFill.style.width = pct + "%";
-    els.overlayCurrent.textContent = fmt(S.currentTime);
-    els.overlayDuration.textContent = fmt(S.duration);
-    
-    const media = activeMedia();
-    if (media && media.buffered && media.buffered.length > 0) {
-      const buf = (media.buffered.end(media.buffered.length - 1) / (S.duration || 1)) * 100;
-      els.miniBuf.style.width = buf + "%";
-    }
-    
-    // Check sleep timer based on actual progress
-    checkSleepTimer();
-  }
-  
-  function checkSleepTimer() {
-    if (S.sleepTimer && S.sleepEndTime) {
-      const remaining = S.sleepEndTime - Date.now();
-      if (remaining <= 0) {
-        // Time's up - stop playback
-        pauseMedia();
-        clearSleepTimer();
-        if (S.panelOpen === "timer") buildTimerPanel();
-      }
-    }
-  }
-  
-  function clearSleepTimer() {
-    if (S.sleepTimer) {
-      clearInterval(S.sleepTimer);
-      S.sleepTimer = null;
-    }
-    S.sleepMinutes = 0;
-    S.sleepEndTime = null;
-  }
-
-  function updateMode() {
-    const hasVideo = !!S.mediaVideo;
-    if (S.mode === "video" && hasVideo) {
-      els.expCover.style.display = "none";
-      videoEl.style.display = "block";
-    } else {
-      els.expCover.style.display = "block";
-      videoEl.style.display = "none";
-    }
-  }
-
-  function updateSpeedUI() {
-    els.speedBtn.textContent = S.speed + "x";
-  }
-
-  function updateLikeUI() {
-    els.likeBtn.innerHTML = icon(S.liked ? "liked" : "like", 22);
-    if (S.liked) {
-      els.likeBtn.classList.add("active");
-    } else {
-      els.likeBtn.classList.remove("active");
-    }
-  }
-
-  function updateRepeatUI() {
-    els.repeatBtn.classList.toggle("active", S.repeat);
-  }
-
-  function updateShuffleUI() {
-    els.shuffleBtn.classList.toggle("active", S.shuffle);
-  }
-
-  /* ── Panel management with side slide ──────────────────── */
-  let currentPanelType = null;
-
-  function openPanelWithExpand(type) {
-    if (!S.expanded) {
-      S.pendingPanel = type;
-      expand();
-    } else {
-      openPanel(type);
-    }
-  }
-
-  function openPanel(type) {
-    const titles = {
-      queue: "A continuación",
-      speed: "Velocidad de reproducción",
-      timer: "Temporizador de sueño",
-      share: "Compartir"
-    };
-    
-    if (currentPanelType === type && els.sidePanel.classList.contains("open")) {
-      closePanel();
-      return;
-    }
-    
-    els.panelTitle.textContent = titles[type] || "Panel";
-    currentPanelType = type;
-    
-    if (type === "queue") buildQueuePanel();
-    if (type === "speed") buildSpeedPanel();
-    if (type === "timer") buildTimerPanel();
-    if (type === "share") buildSharePanel();
-    
-    els.expMedia.classList.add("with-panel");
-    els.sidePanel.classList.add("open");
-    S.panelOpen = type;
-  }
-
-  function closePanel() {
-    els.expMedia.classList.remove("with-panel");
-    els.sidePanel.classList.remove("open");
-    currentPanelType = null;
-    S.panelOpen = null;
-  }
-
-  /* ── Panel builders ───────────────────────────────────── */
-  function buildSpeedPanel() {
-    const speeds = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3];
-    els.panelBody.innerHTML = '<div class="mp-speed-grid">' + speeds.map(s =>
-      `<div class="mp-speed-opt${S.speed===s?" active":""}" data-speed="${s}">${s}x</div>`
-    ).join("") + '</div>';
-    $$(".mp-speed-opt", els.panelBody).forEach(el => {
-      el.onclick = () => {
-        S.speed = parseFloat(el.dataset.speed);
-        activeMedia().playbackRate = S.speed;
-        updateSpeedUI();
-        buildSpeedPanel();
-      };
-    });
-  }
-
-  function buildTimerPanel() {
-    const opts = [5,10,15,30,45,60,90,120];
-    let remaining = 0;
-    if (S.sleepEndTime) {
-      remaining = Math.max(0, (S.sleepEndTime - Date.now()) / 1000);
-    }
-    
-    let html = '<div class="mp-timer-grid">' + opts.map(m =>
-      `<div class="mp-timer-opt${S.sleepMinutes===m?" active":""}" data-min="${m}">${m} min</div>`
-    ).join("") + `<div class="mp-timer-opt${!S.sleepMinutes?" active":""}" data-min="0">Apagar</div></div>`;
-    if (remaining > 0) {
-      html += `<div class="mp-timer-status">⏱ Quedan ${fmt(remaining)}</div>`;
-    }
-    els.panelBody.innerHTML = html;
-    $$(".mp-timer-opt", els.panelBody).forEach(el => {
-      el.onclick = () => {
-        const m = parseInt(el.dataset.min);
-        clearSleepTimer();
-        S.sleepMinutes = m;
-        if (m > 0) {
-          S.sleepEndTime = Date.now() + (m * 60 * 1000);
-          S.sleepTimer = setInterval(() => {
-            checkSleepTimer();
-            if (S.panelOpen === "timer") buildTimerPanel();
-          }, 1000);
-        }
-        buildTimerPanel();
-      };
-    });
-  }
-
-  function buildSharePanel() {
-    const url = S.detailUrl ? window.location.origin + S.detailUrl : window.location.href;
-    const t = encodeURIComponent(S.title + " — " + S.author);
-    const u = encodeURIComponent(url);
-    const shares = [
-      { name: "WhatsApp", url: `https://wa.me/?text=${t}%20${u}`, icon: "💬" },
-      { name: "Twitter", url: `https://twitter.com/intent/tweet?text=${t}&url=${u}`, icon: "🐦" },
-      { name: "Facebook", url: `https://www.facebook.com/sharer/sharer.php?u=${u}`, icon: "👍" },
-      { name: "Telegram", url: `https://t.me/share/url?url=${u}&text=${t}`, icon: "📱" },
-      { name: "Copiar", url: null, icon: "📋" },
-    ];
-    els.panelBody.innerHTML = '<div class="mp-share-grid">' + shares.map(s =>
-      `<button class="mp-share-btn" data-url="${s.url||""}" data-name="${s.name}"><span style="font-size:28px">${s.icon}</span><span>${s.name}</span></button>`
-    ).join("") + '</div>';
-    $$(".mp-share-btn", els.panelBody).forEach(btn => {
-      btn.onclick = () => {
-        if (btn.dataset.name === "Copiar") {
-          navigator.clipboard.writeText(url).then(() => {
-            btn.querySelector("span:last-child").textContent = "¡Copiado!";
-            setTimeout(() => btn.querySelector("span:last-child").textContent = "Copiar", 2000);
-          });
-        } else {
-          window.open(btn.dataset.url, "_blank", "width=600,height=400");
-        }
-      };
-    });
-  }
-
-  function buildQueuePanel() {
-    if (!S.queue || !S.queue.length) {
-      els.panelBody.innerHTML = '<p style="opacity:.5;padding:20px;text-align:center">No hay episodios en cola.</p>';
-      return;
-    }
-    els.panelBody.innerHTML = S.queue.map((ep, i) =>
-      `<div class="mp-queue-item${i===S.queueIndex?" active":""}" data-qi="${i}">
-        <img class="mp-queue-img" src="${ep.coverUrl||""}" alt="" />
-        <div class="mp-queue-info">
-          <div class="mp-queue-title">${ep.title||""}</div>
-          <div class="mp-queue-author">${ep.author||""}</div>
-        </div>
-      </div>`
-    ).join("");
-    $$(".mp-queue-item", els.panelBody).forEach(el => {
-      el.onclick = () => {
-        const idx = parseInt(el.dataset.qi);
-        playQueueItem(idx);
-      };
-    });
-  }
-
-  function playQueueItem(idx) {
-    if (!S.queue[idx]) return;
-    const ep = S.queue[idx];
-    S.queueIndex = idx;
-    loadEpisode(ep.mediaUrl, ep.mediaVideo, ep.initialMode || "audio", ep.coverUrl, ep.coverInfo, ep.title, ep.detailUrl, ep.author, S.queue, ep.text, ep.subtitlesUrl, ep.bgColor, ep.allowDownload);
-    playMedia();
-    buildQueuePanel();
-  }
-
-  /* ── Media control ─────────────────────────────────────── */
-  function loadEpisode(mediaUrl, mediaVideo, initialMode, coverUrl, coverInfo, title, detailUrl, author, queue, text, subtitlesUrl, bgColor, allowDownload) {
-    pauseMedia();
-
-    S.mediaUrl = mediaUrl || "";
-    S.mediaVideo = mediaVideo || "";
-    S.coverUrl = coverUrl || coverInfo || "";
-    S.coverInfo = coverInfo || coverUrl || "";
-    S.title = title || "";
-    S.detailUrl = detailUrl || "";
-    S.author = author || "";
-    S.queue = queue || [];
-    S.text = text || "";
-    S.subtitlesUrl = subtitlesUrl || "";
-    S.bgColor = bgColor || "#111";
-    S.allowDownload = allowDownload === true || allowDownload === "true";
-    S.currentTime = 0;
-    S.duration = 0;
-
-    const hasAudio = !!S.mediaUrl;
-    const hasVideo = !!S.mediaVideo;
-    if (initialMode === "video" && hasVideo) {
-      S.mode = "video";
-    } else if (hasAudio) {
-      S.mode = "audio";
-    } else if (hasVideo) {
-      S.mode = "video";
-    } else {
-      S.mode = "audio";
-    }
-
-    if (hasAudio) audioEl.src = S.mediaUrl;
-    if (hasVideo) videoEl.src = S.mediaVideo;
-
-    audioEl.playbackRate = S.speed;
-    videoEl.playbackRate = S.speed;
-
-    updateBg();
-    updateMiniInfo();
-    updatePlayBtn();
-    updateMode();
-    updateProgress();
-    updateSpeedUI();
-
-    els.mini.classList.add("visible");
-
-    if (S.subtitlesUrl) loadSubtitles(S.subtitlesUrl);
-  }
-
-  function playMedia() {
-    const media = activeMedia();
-    if (!media || !media.src) return;
-    media.play().catch(() => {});
-    S.playing = true;
-    updatePlayBtn();
-    syncMediaStreams();
-  }
-
-  function pauseMedia() {
-    audioEl.pause();
-    videoEl.pause();
-    S.playing = false;
-    updatePlayBtn();
-  }
-
-  function togglePlay() {
-    S.playing ? pauseMedia() : playMedia();
-  }
-
-  function syncMediaStreams() {
-    if (S.mode === "video" && S.mediaVideo) {
-      audioEl.pause();
-      audioEl.muted = true;
-      videoEl.muted = S.muted;
-      videoEl.volume = S.volume;
-      if (S.playing) videoEl.play().catch(() => {});
-    } else {
-      videoEl.pause();
-      videoEl.muted = true;
-      audioEl.muted = S.muted;
-      audioEl.volume = S.volume;
-      if (S.playing) audioEl.play().catch(() => {});
-    }
-  }
-
-  function seekTo(pct) {
-    const media = activeMedia();
-    if (media && S.duration) {
-      media.currentTime = pct * S.duration;
-      S.currentTime = media.currentTime;
-      updateProgress();
-    }
-  }
-
-  function skip(offset) {
-    const media = activeMedia();
-    if (media && S.duration) {
-      media.currentTime = Math.min(S.duration, Math.max(0, media.currentTime + offset));
-    }
-  }
-
-  function nextTrack() {
-    if (!S.queue || !S.queue.length) return;
-    let next = S.queueIndex + 1;
-    if (next >= S.queue.length) next = S.shuffle ? Math.floor(Math.random() * S.queue.length) : 0;
-    if (S.queue[next]) playQueueItem(next);
-  }
-
-  function prevTrack() {
-    if (!S.queue || !S.queue.length) return;
-    let prev = S.queueIndex - 1;
-    if (prev < 0) prev = S.queue.length - 1;
-    if (S.queue[prev]) playQueueItem(prev);
-  }
-
-  function setVolume(v) {
-    S.volume = clamp(v, 0, 1);
-    S.muted = S.volume === 0;
-    activeMedia().volume = S.volume;
-    activeMedia().muted = S.muted;
-    els.volFill.style.width = (S.volume * 100) + "%";
-    els.volBtn.innerHTML = icon(S.muted ? "volMute" : "vol", 20);
-  }
-
-  function toggleFullscreen() {
-    if (!videoEl) return;
-    if (!document.fullscreenElement) {
-      videoEl.requestFullscreen().catch(() => {});
-      S.videoFullscreen = true;
-      showVideoOverlay();
-    } else {
-      document.exitFullscreen();
-      S.videoFullscreen = false;
-      hideVideoOverlay();
-    }
-  }
-  
-  function showVideoOverlay() {
-    els.videoOverlay.classList.add("active");
-    updateOverlayProgress();
-  }
-  
-  function hideVideoOverlay() {
-    els.videoOverlay.classList.remove("active");
-  }
-  
-  function updateOverlayProgress() {
-    const pct = S.duration ? (S.currentTime / S.duration) * 100 : 0;
-    els.overlayProgressFill.style.width = pct + "%";
-    els.overlayCurrent.textContent = fmt(S.currentTime);
-    els.overlayDuration.textContent = fmt(S.duration);
-  }
-
-  /* ── Subtitles ─────────────────────────────────────────── */
-  function loadSubtitles(url) {
-    S.subtitlesCues = [];
-    fetch(url).then(r => r.ok ? r.text() : "").then(txt => {
-      if (!txt) return;
+  /* ─── Subtitles ─── */
+  async function loadSubtitles(url) {
+    state.cues = [];
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      const txt = await res.text();
+      // parse VTT/SRT
       const blocks = txt.split(/\n\s*\n/);
-      blocks.forEach(block => {
-        const lines = block.trim().split("\n");
+      for (const block of blocks) {
+        const lines = block.trim().split('\n');
         for (let i = 0; i < lines.length; i++) {
-          const m = lines[i].match(/(\d{1,2}:?\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{1,2}:?\d{2}:\d{2}[.,]\d{3})/);
-          if (m) {
-            const start = parseTime(m[1]);
-            const end = parseTime(m[2]);
-            const text = lines.slice(i + 1).join(" ").replace(/<[^>]+>/g, "").trim();
-            if (text) S.subtitlesCues.push({ start, end, text });
+          const match = lines[i].match(/(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[.,](\d{3})/);
+          if (match) {
+            const start = +match[1] * 3600 + +match[2] * 60 + +match[3] + +match[4] / 1000;
+            const end = +match[5] * 3600 + +match[6] * 60 + +match[7] + +match[8] / 1000;
+            const text = lines.slice(i + 1).join('\n').replace(/<[^>]+>/g, '').trim();
+            if (text) state.cues.push({ start, end, text });
             break;
           }
         }
-      });
-    }).catch(() => {});
-  }
-
-  function parseTime(str) {
-    str = str.replace(",", ".");
-    const parts = str.split(":");
-    if (parts.length === 3) return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
-    if (parts.length === 2) return parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
-    return parseFloat(str);
+      }
+    } catch (e) { console.warn('Subtitle load failed:', e); }
   }
 
   function getCurrentCue(time) {
-    for (const cue of S.subtitlesCues) {
-      if (time >= cue.start && time <= cue.end) return cue.text;
-    }
-    return "";
+    for (const c of state.cues) { if (time >= c.start && time <= c.end) return c.text; }
+    return '';
   }
 
-  function updateSubtitles() {
-    if (S.subtitlesOn && S.subtitlesCues.length) {
-      const cue = getCurrentCue(S.currentTime);
-      els.expSubs.textContent = cue;
-      els.expSubs.style.display = cue ? "block" : "none";
+  /* ─── Media Session API ─── */
+  function updateMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: state.title,
+      artist: state.author,
+      artwork: [{ src: state.coverUrl, sizes: '512x512', type: 'image/png' }],
+    });
+    navigator.mediaSession.setActionHandler('play', () => togglePlay());
+    navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+    navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
+    navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+    navigator.mediaSession.setActionHandler('seekbackward', () => seek(-10));
+    navigator.mediaSession.setActionHandler('seekforward', () => seek(10));
+    try {
+      navigator.mediaSession.setActionHandler('seekto', (d) => {
+        if (d.seekTime != null) { activeMedia().currentTime = d.seekTime; }
+      });
+    } catch (e) {}
+  }
+
+  function updatePositionState() {
+    if (!('mediaSession' in navigator) || !state.duration) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: state.duration,
+        playbackRate: state.playbackRate,
+        position: Math.min(state.currentTime, state.duration),
+      });
+    } catch (e) {}
+  }
+
+  /* ─── Playback ─── */
+  function togglePlay() {
+    const m = activeMedia();
+    if (m.paused) { m.play().catch(() => {}); }
+    else { m.pause(); }
+  }
+  function seek(delta) { const m = activeMedia(); m.currentTime = clamp(m.currentTime + delta, 0, m.duration || 0); }
+  function setRate(r) {
+    state.playbackRate = r;
+    audioEl.playbackRate = r;
+    videoEl.playbackRate = r;
+  }
+
+  function switchMode(mode) {
+    if (mode === state.mode) return;
+    const wasPlaying = !activeMedia().paused;
+    const pos = activeMedia().currentTime;
+    activeMedia().pause();
+    state.mode = mode;
+    const m = activeMedia();
+    if (m.readyState < 1) {
+      m.addEventListener('loadedmetadata', function once() {
+        m.removeEventListener('loadedmetadata', once);
+        m.currentTime = pos;
+        if (wasPlaying) m.play().catch(() => {});
+      });
     } else {
-      els.expSubs.style.display = "none";
+      m.currentTime = pos;
+      if (wasPlaying) m.play().catch(() => {});
+    }
+    updateMediaArea();
+    updateModeBtn();
+  }
+
+  function updateModeBtn() {
+    if (!state.mediaUrl || !state.mediaVideo) {
+      els.btnMode.style.display = 'none';
+      return;
+    }
+    els.btnMode.style.display = '';
+    els.btnMode.innerHTML = state.mode === 'video' ? icons.audio : icons.video;
+    els.btnMode.setAttribute('aria-label', state.mode === 'video' ? 'Switch to Audio' : 'Switch to Video');
+  }
+
+  function updateMediaArea() {
+    const area = els.mediaArea;
+    // remove video if present
+    if (videoEl.parentNode === area) area.removeChild(videoEl);
+    // remove subtitle container
+    const existingSub = $('.mp-subtitles-overlay', area) || $('.mp-subtitle-full', area);
+    if (existingSub) existingSub.remove();
+
+    if (state.mode === 'video') {
+      els.expCover.style.display = 'none';
+      area.insertBefore(videoEl, area.firstChild);
+      videoEl.style.width = '100%';
+      videoEl.style.height = '100%';
+      // subtitles overlay on video
+      if (state.subtitlesOn && state.cues.length) {
+        const sub = ce('div');
+        sub.className = 'mp-subtitles-overlay';
+        area.appendChild(sub);
+      }
+    } else {
+      els.expCover.style.display = '';
+      if (state.subtitlesOn && state.cues.length) {
+        els.expCover.style.display = 'none';
+        const sub = ce('div');
+        sub.className = 'mp-subtitle-full';
+        area.appendChild(sub);
+      }
     }
   }
 
-  /* ── Expand / Collapse ─────────────────────────────────── */
+  /* ─── UI Updates ─── */
+  function updateUI() {
+    // mini
+    els.miniCover.src = state.coverUrl;
+    els.miniTitle.textContent = state.title;
+    els.miniAuthor.textContent = state.author;
+    // expanded
+    els.expCover.src = state.coverUrl;
+    els.trackTitle.textContent = state.title;
+    els.trackAuthor.innerHTML = state.detailUrl
+      ? `<a href="${state.detailUrl}">${state.author}</a>`
+      : state.author;
+  }
+
+  function updatePlayBtn() {
+    const icon = state.isPlaying ? icons.pause : icons.play;
+    els.btnPlay.innerHTML = icon;
+    els.miniPlay.innerHTML = icon;
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = state.isPlaying ? 'playing' : 'paused';
+    }
+  }
+
+  function updateProgress() {
+    const pct = state.duration ? (state.currentTime / state.duration) * 100 : 0;
+    els.progressFill.style.width = pct + '%';
+    els.miniProgressFill.style.width = pct + '%';
+    els.timeCur.textContent = fmt(state.currentTime);
+    els.timeDur.textContent = fmt(state.duration);
+    // subtitles
+    if (state.subtitlesOn && state.cues.length) {
+      const cue = getCurrentCue(state.currentTime);
+      state.currentCue = cue;
+      const subEl = $('.mp-subtitles-overlay', els.mediaArea) || $('.mp-subtitle-full', els.mediaArea);
+      if (subEl) subEl.textContent = cue;
+    }
+  }
+
+  /* ─── Expand / Collapse ─── */
   function expand() {
-    S.expanded = true;
-    els.exp.classList.add("open");
-    document.body.style.overflow = "hidden";
-    updateMode();
-    
-    if (S.pendingPanel) {
-      setTimeout(() => {
-        openPanel(S.pendingPanel);
-        S.pendingPanel = null;
-      }, 400);
-    }
+    state.isExpanded = true;
+    exp.classList.add('open');
+    mini.classList.add('hidden');
+    document.body.style.overflow = 'hidden';
   }
-
   function collapse() {
-    S.expanded = false;
-    els.exp.classList.remove("open");
+    state.isExpanded = false;
+    exp.classList.remove('open');
+    mini.classList.remove('hidden');
     closePanel();
-    document.body.style.overflow = "";
-    S.pendingPanel = null;
+    document.body.style.overflow = '';
   }
 
-  function toggleExpand() {
-    if (S.expanded) {
-      collapse();
-    } else {
+  /* ─── Panels ─── */
+  function openPanel(title, contentFn) {
+    els.panelHead.textContent = title;
+    els.panelBody.innerHTML = '';
+    contentFn(els.panelBody);
+    els.panel.classList.add('open');
+  }
+  function closePanel() { els.panel.classList.remove('open'); }
+
+  function buildQueuePanel(body) {
+    if (!state.queue.length) {
+      body.innerHTML = '<p style="opacity:0.5;padding:20px 0;text-align:center;">No hay episodios en cola</p>';
+      return;
+    }
+    state.queue.forEach((ep, i) => {
+      const item = ce('div');
+      item.className = 'mp-queue-item' + (i === state.queueIndex ? ' playing' : '');
+      item.innerHTML = `
+        <img src="${ep.coverUrl || state.coverUrl}" alt="">
+        <div class="qi-info">
+          <div class="qi-title">${ep.title}</div>
+          <div class="qi-author">${ep.author || ''}</div>
+        </div>
+      `;
+      item.addEventListener('click', () => { state.queueIndex = i; playQueueItem(i); });
+      body.appendChild(item);
+    });
+  }
+
+  function buildSpeedPanel(body) {
+    const speeds = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+    speeds.forEach(s => {
+      const opt = ce('div');
+      opt.className = 'mp-speed-opt' + (state.playbackRate === s ? ' active' : '');
+      opt.innerHTML = `<span>${s === 1 ? 'Normal' : s + 'x'}</span><div class="dot"></div>`;
+      opt.addEventListener('click', () => {
+        setRate(s);
+        $$('.mp-speed-opt', body).forEach(o => o.classList.remove('active'));
+        opt.classList.add('active');
+        updateSpeedBadge();
+      });
+      body.appendChild(opt);
+    });
+  }
+
+  function updateSpeedBadge() {
+    const existing = $('.mp-badge', els.btnSpeed);
+    if (existing) existing.remove();
+    if (state.playbackRate !== 1) {
+      const badge = ce('span');
+      badge.className = 'mp-badge';
+      badge.style.color = els.btnPlay.style.background;
+      badge.style.background = els.btnPlay.style.color;
+      badge.textContent = state.playbackRate + '';
+      els.btnSpeed.appendChild(badge);
+    }
+  }
+
+  function buildTimerPanel(body) {
+    const options = [
+      { label: 'Desactivado', mins: 0 },
+      { label: '5 minutos', mins: 5 },
+      { label: '10 minutos', mins: 10 },
+      { label: '15 minutos', mins: 15 },
+      { label: '30 minutos', mins: 30 },
+      { label: '45 minutos', mins: 45 },
+      { label: '1 hora', mins: 60 },
+      { label: 'Fin del episodio', mins: -1 },
+    ];
+    const activeType = state.timerType;
+    options.forEach(opt => {
+      const el = ce('div');
+      const isActive = (opt.mins === 0 && !state.timerEnd && !state.timerType) ||
+                        (opt.mins === -1 && state.timerType === 'end') ||
+                        (opt.mins > 0 && state.timerType === opt.mins);
+      el.className = 'mp-timer-opt' + (isActive ? ' active' : '');
+      el.innerHTML = `<span>${opt.label}${state.timerEnd && opt.mins > 0 && state.timerType === opt.mins ? ' (' + fmt(Math.max(0, (state.timerEnd - Date.now()) / 1000)) + ')' : ''}</span><div class="check"></div>`;
+      el.addEventListener('click', () => {
+        if (opt.mins === 0) { state.timerEnd = null; state.timerType = null; }
+        else if (opt.mins === -1) { state.timerEnd = null; state.timerType = 'end'; }
+        else { state.timerEnd = Date.now() + opt.mins * 60000; state.timerType = opt.mins; }
+        closePanel();
+      });
+      body.appendChild(el);
+    });
+  }
+
+  function buildSharePanel(body) {
+    const url = state.detailUrl ? (location.origin + state.detailUrl) : location.href;
+    const shareData = [
+      { name: 'Copiar', icon: '📋', action: () => { navigator.clipboard.writeText(url).then(() => {}); } },
+      { name: 'WhatsApp', icon: '💬', action: () => window.open(`https://wa.me/?text=${encodeURIComponent(state.title + ' ' + url)}`) },
+      { name: 'Twitter', icon: '𝕏', action: () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(state.title)}&url=${encodeURIComponent(url)}`) },
+      { name: 'Facebook', icon: '📘', action: () => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`) },
+      { name: 'Telegram', icon: '✈️', action: () => window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(state.title)}`) },
+      { name: 'Email', icon: '✉️', action: () => window.open(`mailto:?subject=${encodeURIComponent(state.title)}&body=${encodeURIComponent(url)}`) },
+    ];
+    // native share first if available
+    if (navigator.share) {
+      shareData.unshift({
+        name: 'Compartir',
+        icon: '📤',
+        action: () => navigator.share({ title: state.title, url }).catch(() => {}),
+      });
+    }
+    const grid = ce('div');
+    grid.className = 'mp-share-grid';
+    shareData.forEach(s => {
+      const item = ce('div');
+      item.className = 'mp-share-item';
+      item.innerHTML = `<button style="background:rgba(255,255,255,0.1);font-size:22px;">${s.icon}</button><span>${s.name}</span>`;
+      $('button', item).addEventListener('click', () => { s.action(); closePanel(); });
+      grid.appendChild(item);
+    });
+    body.appendChild(grid);
+  }
+
+  function buildInfoPanel(body) {
+    body.innerHTML = `
+      <div class="mp-info-content">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;">
+          <img src="${state.coverInfo || state.coverUrl}" style="width:80px;height:80px;border-radius:8px;object-fit:cover;" alt="">
+          <div>
+            <div style="font-size:16px;font-weight:700;">${state.title}</div>
+            <div style="font-size:13px;opacity:0.6;margin-top:4px;">${state.author}</div>
+          </div>
+        </div>
+        <div style="white-space:pre-wrap;">${state.text || 'Sin descripción disponible.'}</div>
+        ${state.allowDownload ? `<div style="margin-top:16px;"><button class="mp-dl-btn" style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:rgba(255,255,255,0.1);border-radius:8px;font-size:14px;font-weight:600;width:100%;justify-content:center;"><span style="width:20px;height:20px;">${icons.download}</span>Descargar</button></div>` : ''}
+      </div>
+    `;
+    const dlBtn = $('.mp-dl-btn', body);
+    if (dlBtn) {
+      dlBtn.addEventListener('click', () => {
+        const url = state.mode === 'video' && state.mediaVideo ? state.mediaVideo : state.mediaUrl;
+        const a = ce('a'); a.href = url; a.download = state.title; a.target = '_blank';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      });
+    }
+  }
+
+  /* ─── Queue playback ─── */
+  function playQueueItem(idx) {
+    if (idx < 0 || idx >= state.queue.length) return;
+    const ep = state.queue[idx];
+    state.queueIndex = idx;
+    loadEpisode(
+      ep.mediaUrl || '', ep.mediaVideo || '', ep.initialMode || 'audio',
+      ep.coverUrl || '', ep.coverInfo || '', ep.title || '',
+      ep.detailUrl || '', ep.author || '', state.queue,
+      ep.text || '', ep.subtitlesUrl || '', ep.bgColor || '#1a1a2e',
+      ep.allowDownload || false
+    );
+    closePanel();
+  }
+
+  function playNext() {
+    if (!state.queue.length) return;
+    let next = state.queueIndex + 1;
+    if (state.shuffle) next = Math.floor(Math.random() * state.queue.length);
+    if (next >= state.queue.length) {
+      if (state.repeat === 2) next = 0; else return;
+    }
+    playQueueItem(next);
+  }
+  function playPrev() {
+    if (activeMedia().currentTime > 3) { activeMedia().currentTime = 0; return; }
+    if (!state.queue.length) return;
+    let prev = state.queueIndex - 1;
+    if (prev < 0) prev = state.repeat === 2 ? state.queue.length - 1 : 0;
+    playQueueItem(prev);
+  }
+
+  /* ─── Gestures ─── */
+  function setupGestures() {
+    let startY = 0, startX = 0, dy = 0, isDragging = false, target = null;
+
+    // Expand gesture on mini player (swipe up)
+    mini.addEventListener('touchstart', (e) => {
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+    }, { passive: true });
+    mini.addEventListener('touchend', (e) => {
+      const endY = e.changedTouches[0].clientY;
+      const endX = e.changedTouches[0].clientX;
+      const diffY = startY - endY;
+      const diffX = Math.abs(endX - startX);
+      if (diffY > 40 && diffX < 80) expand();
+    }, { passive: true });
+    // Tap on mini to expand
+    mini.addEventListener('click', (e) => {
+      if (e.target.closest('.mp-mini-btn')) return;
       expand();
-    }
-  }
+    });
 
-  /* ── Events ────────────────────────────────────────────── */
-  function bindEvents() {
-    els.playBtn.onclick = togglePlay;
-    els.prevBtn.onclick = prevTrack;
-    els.nextBtn.onclick = nextTrack;
-    els.rewindBtn.onclick = () => skip(-15);
-    els.forwardBtn.onclick = () => skip(15);
-    
-    els.repeatBtn.onclick = () => {
-      S.repeat = !S.repeat;
-      updateRepeatUI();
-    };
-    els.shuffleBtn.onclick = () => {
-      S.shuffle = !S.shuffle;
-      updateShuffleUI();
-    };
-    
-    els.likeBtn.onclick = () => {
-      S.liked = !S.liked;
-      updateLikeUI();
-    };
-    
-    els.speedBtn.onclick = () => openPanelWithExpand("speed");
-    els.timerBtn.onclick = () => openPanelWithExpand("timer");
-    els.addBtn.onclick = () => openPanelWithExpand("queue");
-    els.expandBtn.onclick = toggleExpand;
-    
-    els.panelClose.onclick = closePanel;
-    
-    els.miniProg.onclick = (e) => {
-      const r = els.miniProg.getBoundingClientRect();
-      seekTo((e.clientX - r.left) / r.width);
-    };
-    
-    els.volBtn.onclick = () => { setVolume(S.muted ? (S.volume || 1) : 0); };
-    els.volBar.onclick = (e) => {
-      const r = els.volBar.getBoundingClientRect();
-      setVolume((e.clientX - r.left) / r.width);
-    };
-    
-    // Fullscreen overlay controls
-    els.overlayPlay.onclick = togglePlay;
-    els.overlayPrev.onclick = prevTrack;
-    els.overlayNext.onclick = nextTrack;
-    els.overlayExit.onclick = toggleFullscreen;
-    els.overlayProgress.onclick = (e) => {
-      const r = els.overlayProgress.getBoundingClientRect();
-      seekTo((e.clientX - r.left) / r.width);
-    };
-    
-    // Close expanded with close button
-    const closeBtn = ce("button", "mp-panel-close");
-    closeBtn.style.cssText = "position:absolute;top:20px;left:20px;z-index:15;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);border-radius:50%;padding:10px";
-    closeBtn.innerHTML = icon("close", 24);
-    els.exp.appendChild(closeBtn);
-    closeBtn.onclick = collapse;
-    
-    // Video hover for fullscreen button
-    videoEl.addEventListener("mouseenter", () => {
-      if (S.mode === "video" && !S.videoFullscreen) {
-        const fsBtn = $("#mp-video-fs-btn");
-        if (fsBtn) fsBtn.style.opacity = "1";
-      }
-    });
-    
-    videoEl.addEventListener("click", () => {
-      if (S.mode === "video") togglePlay();
-    });
-    
-    // Media events
-    function onTimeUpdate() {
-      if (S.seekDragging) return;
-      const m = activeMedia();
-      S.currentTime = m.currentTime;
-      S.duration = m.duration || 0;
-      updateProgress();
-      if (S.subtitlesUrl) updateSubtitles();
-      if (els.videoOverlay.classList.contains("active")) updateOverlayProgress();
-    }
-    
-    function onEnded() {
-      if (S.repeat) {
-        activeMedia().currentTime = 0;
-        playMedia();
+    // Collapse gesture on expanded (swipe down from handle/header)
+    const dragTarget = els.handle;
+    dragTarget.addEventListener('touchstart', (e) => {
+      startY = e.touches[0].clientY;
+      isDragging = true;
+      dy = 0;
+      exp.classList.add('dragging');
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      dy = e.touches[0].clientY - startY;
+      if (dy < 0) dy = 0;
+      exp.style.transform = `translateY(${dy}px)`;
+    }, { passive: true });
+
+    document.addEventListener('touchend', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      exp.classList.remove('dragging');
+      if (dy > 120) {
+        collapse();
+        exp.style.transform = '';
       } else {
-        nextTrack();
+        exp.style.transform = '';
       }
+      dy = 0;
+    }, { passive: true });
+
+    // Panel drag-to-close
+    let panelDragging = false, panelDy = 0, panelStartY = 0;
+    const ph = $('.mp-panel-handle', exp);
+    ph.addEventListener('touchstart', (e) => {
+      panelStartY = e.touches[0].clientY;
+      panelDragging = true;
+      panelDy = 0;
+      els.panel.classList.add('dragging');
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!panelDragging) return;
+      panelDy = e.touches[0].clientY - panelStartY;
+      if (panelDy < 0) panelDy = 0;
+      els.panel.style.transform = `translateY(${panelDy}px)`;
+    }, { passive: true });
+
+    document.addEventListener('touchend', () => {
+      if (!panelDragging) return;
+      panelDragging = false;
+      els.panel.classList.remove('dragging');
+      if (panelDy > 80) {
+        closePanel();
+      }
+      els.panel.style.transform = '';
+      panelDy = 0;
+    }, { passive: true });
+
+    // Swipe up from bottom of expanded → open queue panel
+    let expBottomStartY = 0;
+    const ctrlArea = $('.mp-controls-area', exp);
+    ctrlArea.addEventListener('touchstart', (e) => {
+      expBottomStartY = e.touches[0].clientY;
+    }, { passive: true });
+    ctrlArea.addEventListener('touchend', (e) => {
+      const diffY = expBottomStartY - e.changedTouches[0].clientY;
+      if (diffY > 60 && !els.panel.classList.contains('open')) {
+        openPanel('A continuación', buildQueuePanel);
+      }
+    }, { passive: true });
+  }
+
+  /* ─── Progress bar touch ─── */
+  function setupProgressTouch() {
+    let seeking = false;
+    const wrap = els.progressWrap;
+    const track = els.progressTrack;
+
+    function getPos(e) {
+      const rect = track.getBoundingClientRect();
+      const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+      return clamp(x / rect.width, 0, 1);
     }
-    
-    audioEl.addEventListener("timeupdate", onTimeUpdate);
-    videoEl.addEventListener("timeupdate", onTimeUpdate);
-    audioEl.addEventListener("loadedmetadata", () => { S.duration = audioEl.duration; updateProgress(); });
-    videoEl.addEventListener("loadedmetadata", () => { S.duration = videoEl.duration; updateProgress(); });
-    audioEl.addEventListener("ended", onEnded);
-    videoEl.addEventListener("ended", onEnded);
-    
-    // Keyboard shortcuts
-    document.addEventListener("keydown", (e) => {
-      if (!els.mini.classList.contains("visible")) return;
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-      if (e.code === "Space") { e.preventDefault(); togglePlay(); }
-      if (e.code === "ArrowRight") skip(10);
-      if (e.code === "ArrowLeft") skip(-10);
-      if (e.code === "ArrowUp") { e.preventDefault(); setVolume(S.volume + 0.1); }
-      if (e.code === "ArrowDown") { e.preventDefault(); setVolume(S.volume - 0.1); }
-      if (e.code === "KeyF") { e.preventDefault(); toggleFullscreen(); }
+
+    wrap.addEventListener('touchstart', (e) => {
+      seeking = true;
+      wrap.classList.add('active');
+      const pct = getPos(e);
+      activeMedia().currentTime = pct * (state.duration || 0);
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!seeking) return;
+      const pct = getPos(e);
+      els.progressFill.style.width = (pct * 100) + '%';
+      els.timeCur.textContent = fmt(pct * (state.duration || 0));
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+      if (!seeking) return;
+      seeking = false;
+      wrap.classList.remove('active');
+      const rect = track.getBoundingClientRect();
+      const x = e.changedTouches[0].clientX - rect.left;
+      const pct = clamp(x / rect.width, 0, 1);
+      activeMedia().currentTime = pct * (state.duration || 0);
+    }, { passive: true });
+  }
+
+  /* ─── Timer logic ─── */
+  function checkTimer() {
+    if (!state.timerEnd && state.timerType !== 'end') return;
+    if (state.timerType === 'end') return; // handled on 'ended'
+    if (Date.now() >= state.timerEnd) {
+      activeMedia().pause();
+      state.timerEnd = null;
+      state.timerType = null;
+    }
+  }
+
+  /* ─── Event bindings ─── */
+  function bindEvents() {
+    // Media events — bind both audio and video
+    [audioEl, videoEl].forEach(m => {
+      m.addEventListener('play', () => { state.isPlaying = true; updatePlayBtn(); });
+      m.addEventListener('pause', () => { state.isPlaying = false; updatePlayBtn(); });
+      m.addEventListener('timeupdate', () => {
+        state.currentTime = m.currentTime;
+        state.duration = m.duration || 0;
+        if (m === activeMedia()) { updateProgress(); updatePositionState(); checkTimer(); }
+      });
+      m.addEventListener('loadedmetadata', () => {
+        state.duration = m.duration || 0;
+        updateProgress();
+      });
+      m.addEventListener('ended', () => {
+        if (state.timerType === 'end') {
+          state.timerType = null;
+          state.timerEnd = null;
+          return;
+        }
+        if (state.repeat === 1) { m.currentTime = 0; m.play(); return; }
+        playNext();
+      });
     });
+
+    // Buttons
+    els.btnPlay.addEventListener('click', togglePlay);
+    els.miniPlay.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
+    els.miniNext.addEventListener('click', (e) => { e.stopPropagation(); playNext(); });
+    els.btnPrev.addEventListener('click', playPrev);
+    els.btnNext.addEventListener('click', playNext);
+    els.btnRew.addEventListener('click', () => seek(-10));
+    els.btnFwd.addEventListener('click', () => seek(10));
+    els.btnCollapse.addEventListener('click', collapse);
+    els.panelClose.addEventListener('click', closePanel);
+
+    els.btnMode.addEventListener('click', () => {
+      switchMode(state.mode === 'video' ? 'audio' : 'video');
+    });
+
+    els.btnSubtitle.addEventListener('click', () => {
+      state.subtitlesOn = !state.subtitlesOn;
+      els.btnSubtitle.classList.toggle('active', state.subtitlesOn);
+      updateMediaArea();
+    });
+
+    els.btnShuffle.addEventListener('click', () => {
+      state.shuffle = !state.shuffle;
+      els.btnShuffle.classList.toggle('active', state.shuffle);
+      els.btnShuffle.style.opacity = state.shuffle ? '1' : '0.5';
+    });
+
+    els.btnRepeat.addEventListener('click', () => {
+      state.repeat = (state.repeat + 1) % 3;
+      els.btnRepeat.style.opacity = state.repeat ? '1' : '0.5';
+      if (state.repeat === 1) els.btnRepeat.innerHTML = icons.repeat.replace('</svg>', '<circle cx="12" cy="12" r="3" fill="currentColor"/></svg>');
+      else els.btnRepeat.innerHTML = icons.repeat;
+    });
+
+    els.btnSpeed.addEventListener('click', () => openPanel('Velocidad', buildSpeedPanel));
+    els.btnTimer.addEventListener('click', () => openPanel('Temporizador', buildTimerPanel));
+    els.btnQueue.addEventListener('click', () => openPanel('A continuación', buildQueuePanel));
+    els.btnShare.addEventListener('click', () => openPanel('Compartir', buildSharePanel));
+    els.btnMore.addEventListener('click', () => openPanel('Información', buildInfoPanel));
+
+    setupGestures();
+    setupProgressTouch();
   }
 
-  /* ── Public API ────────────────────────────────────────── */
-  window.playEpisodeExpanded = function (mediaUrl, mediaVideo, initialMode, coverUrl, coverInfo, title, detailUrl, author, queue, text, subtitlesUrl, bgColor, allowDownload) {
-    if (!els.mini) { buildUI(); refs(); bindEvents(); }
-    loadEpisode(mediaUrl, mediaVideo, initialMode, coverUrl, coverInfo, title, detailUrl, author, queue, text, subtitlesUrl, bgColor, allowDownload);
-    playMedia();
+  /* ─── Load episode ─── */
+  function loadEpisode(mediaUrl, mediaVideo, initialMode, coverUrl, coverInfo, title, detailUrl, author, queue, text, subtitlesUrl, bgColor, allowDownload) {
+    state.mediaUrl = mediaUrl || '';
+    state.mediaVideo = mediaVideo || '';
+    state.coverUrl = coverUrl || '';
+    state.coverInfo = coverInfo || '';
+    state.title = title || '';
+    state.detailUrl = detailUrl || '';
+    state.author = author || '';
+    state.queue = queue || [];
+    state.text = text || '';
+    state.subtitlesUrl = subtitlesUrl || '';
+    state.bgColor = bgColor || '#1a1a2e';
+    state.allowDownload = allowDownload === true || allowDownload === 'true';
+    state.subtitlesOn = false;
+    state.currentCue = '';
+
+    // determine mode
+    if (initialMode === 'video' && state.mediaVideo) state.mode = 'video';
+    else if (state.mediaUrl) state.mode = 'audio';
+    else if (state.mediaVideo) state.mode = 'video';
+    else state.mode = 'audio';
+
+    // set sources
+    if (state.mediaUrl) audioEl.src = state.mediaUrl;
+    if (state.mediaVideo) videoEl.src = state.mediaVideo;
+
+    // subtitle button visibility
+    els.btnSubtitle.style.display = state.subtitlesUrl ? '' : 'none';
+
+    // download
+    // queue index
+    if (state.queue.length) {
+      state.queueIndex = state.queue.findIndex(q => q.title === state.title);
+      if (state.queueIndex === -1) state.queueIndex = 0;
+    }
+
+    applyColors(state.bgColor);
+    updateUI();
+    updateModeBtn();
+    updateMediaArea();
+    updateMediaSession();
+    loadSubtitles(state.subtitlesUrl);
+
+    mini.classList.remove('hidden');
+
+    // auto play
+    activeMedia().play().catch(() => {});
     expand();
-  };
-
-  window.playEpisodeMini = function (mediaUrl, mediaVideo, initialMode, coverUrl, coverInfo, title, detailUrl, author, queue, text, subtitlesUrl, bgColor, allowDownload) {
-    if (!els.mini) { buildUI(); refs(); bindEvents(); }
-    loadEpisode(mediaUrl, mediaVideo, initialMode, coverUrl, coverInfo, title, detailUrl, author, queue, text, subtitlesUrl, bgColor, allowDownload);
-    playMedia();
-  };
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => { buildUI(); refs(); bindEvents(); });
-  } else {
-    buildUI(); refs(); bindEvents();
   }
+
+  /* ─── Init ─── */
+  function init() {
+    if (state.initialized) return;
+    state.initialized = true;
+    bindEvents();
+  }
+
+  /* ─── Global API ─── */
+  window.playEpisodeExpanded = function (mediaUrl, mediaVideo, initialMode, coverUrl, coverInfo, title, detailUrl, author, queue, text, subtitlesUrl, bgColor, allowDownload) {
+    init();
+    loadEpisode(mediaUrl, mediaVideo, initialMode, coverUrl, coverInfo, title, detailUrl, author, queue, text, subtitlesUrl, bgColor, allowDownload);
+  };
+
+  // Expose collapse/expand
+  window.mpCollapse = collapse;
+  window.mpExpand = expand;
 })();
